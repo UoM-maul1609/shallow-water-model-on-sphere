@@ -1,0 +1,30 @@
+
+ &run_vars
+ 	nm1%inputfile  = 'saturn_winds_vs_latitude.nc'
+	nm1%outputfile = '/tmp/output_n.nc',
+	nm1%add_random_height_noise=.true.,
+	nm1%initially_geostrophic=.true.,
+	nm1%viscous_dissipation=.true.,
+	nm1%dissipate_h=.true.,
+	nm1%initial_winds=1,  ! 1==saturn_winds, 2==idealised_jet
+	nm1%nudge=.true.,
+	nm1%nudge_timescale=6.e5, ! default 6e5 seconds
+	nm1%restart=.false.,
+	nm1%wind_factor=1.0,
+	nm1%wind_shift=0.0,
+	nm1%wind_reduce=0.0,
+	nm1%vis=0.e5,
+	nm1%runtime=7776000.,
+	nm1%dt=60.,
+	nm1%output_interval=57600.,
+	nm1%grav=10.44,		! gravity
+	nm1%rho=0.19,		! density
+	nm1%Re=5.4155760e7, ! radius of planet - saturn: 5.8232e7, 0.93 is 5.4155760e7
+	nm1%rotation_period_hours=10.55,
+	nm1%scale_height=60e3, ! scale-height of saturn's atmosphere
+	nm1%ip=400,
+	nm1%jp=120,
+	nm1%slat=-90.,
+	nm1%nlat=90.,
+	nm1%slat_thresh=65.,
+	nm1%nlat_thresh=86.5/
