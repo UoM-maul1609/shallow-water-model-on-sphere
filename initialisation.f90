@@ -327,6 +327,7 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		call MPI_CART_SHIFT( comm2d, 1, 1, nbottom, ntop, error)
 		if(nbottom .ne. -1) then
+			tag1=001
 			call MPI_Recv(theta(1-o_halo), 1, MPI_REAL8, nbottom, &
 					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
 		endif
@@ -340,6 +341,7 @@
 		enddo
 		
 		if(ntop .ne. -1) then
+			tag1=001
 			call MPI_Send(theta(jpp), 1, MPI_REAL8, ntop, &
 				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
 		endif		
