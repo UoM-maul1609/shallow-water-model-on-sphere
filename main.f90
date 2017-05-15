@@ -140,7 +140,9 @@
  				grid1%u_nudge,grid1%o_halo, &
 				grid1%ipstart, grid1%jpstart, grid1%coords, &
 				nm1%inputfile, nm1%add_random_height_noise, &
-				nm1%initially_geostrophic, nm1%initial_winds, nm1%ip, nm1%jp, &
+				nm1%initially_geostrophic, nm1%initial_winds, &
+				nm1%u_jet, nm1%theta_jet, nm1%h_jet, &
+				nm1%ip, nm1%jp, &
 				nm1%wind_factor, nm1%wind_shift, nm1%wind_reduce, nm1%runtime, &
 				nm1%dt, nm1%grav, nm1%rho, nm1%re, &
 				nm1%rotation_period_hours, nm1%scale_height, nm1%slat, &

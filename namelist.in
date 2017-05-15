@@ -6,7 +6,10 @@
 	nm1%initially_geostrophic=.true.,
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.true.,
-	nm1%initial_winds=1,  ! 1==saturn_winds, 2==idealised_jet
+	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
+	nm1%u_jet=100.,  ! speed of jet
+	nm1%theta_jet=76., ! latitude of jet
+	nm1%h_jet=1., ! standard deviation of jet (width)
 	nm1%nudge=.true.,
 	nm1%nudge_timescale=6.e5, ! default 6e5 seconds
 	nm1%restart=.false.,

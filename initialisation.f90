@@ -60,6 +60,7 @@
 	!>@param[in] add_random_height_noise - add noise to get going
 	!>@param[in] initially_geostrophic - set to geostrophic balance
 	!>@param[in] initial_winds - flag: saturn, or jet?
+	!>@param[in] ideal jet parameters: u_jet, theta_jet, h_jet
 	!>@param[in] ip - global ip (all pes)
 	!>@param[in] jp - global jp (all pes)
 	!>@param[in] wind_factor - factor to multiply mean wind by
@@ -88,7 +89,9 @@
 				recq, cq_s, cq, dp1, dq, &
 				u_nudge, o_halo, ipstart, jpstart, coords, &
 				inputfile, add_random_height_noise, &
-				initially_geostrophic, initial_winds, ip, jp, &
+				initially_geostrophic, initial_winds, &
+				u_jet, theta_jet, h_jet, &
+				ip, jp, &
 				wind_factor, wind_shift, wind_reduce, runtime, &
 				dt_nm, grav, rho_nm, re_nm, &
 				rotation_period_hours, scale_height, slat, nlat, &
@@ -121,7 +124,8 @@
 		real(sp), intent(in) :: wind_factor, wind_shift, wind_reduce, runtime, &
 							dt_nm, grav, rho_nm, re_nm, &
 							rotation_period_hours, scale_height, &
-							slat_thresh, nlat_thresh
+							slat_thresh, nlat_thresh, &
+							u_jet, theta_jet, h_jet
 		real(sp), intent(inout) :: slat, nlat
 		integer(i4b), dimension(2), intent(in) :: dims
 		integer(i4b), dimension(2), intent(inout) :: coords
@@ -366,26 +370,47 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
+		select case (initial_winds)
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			! saturn winds:                                                              !
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			case (1) 
+			! interpolate winds to u_nudge
+			delta_omega=2._sp*PI/(3600._sp)*(1._sp/10.656_sp-1._sp/rotation_period_hours)
+			do i=1-o_halo,jpp+o_halo
+				iloc=locate(latitude(1:nlats),asin(sin(theta(i)))*180._sp/PI)
+				iloc=min(nlats-1,iloc)
+				iloc=max(1,iloc)
+				! linear interp theta
 
-		! interpolate winds to u_nudge
-		delta_omega=2._sp*PI/(3600._sp)*(1._sp/10.656_sp-1._sp/rotation_period_hours)
-		do i=1-o_halo,jpp+o_halo
-			iloc=locate(latitude(1:nlats),asin(sin(theta(i)))*180._sp/PI)
-			iloc=min(nlats-1,iloc)
-			iloc=max(1,iloc)
-			! linear interp theta
-
-			call polint(latitude(iloc:iloc+1), wind(iloc:iloc+1), &
-				min(max( asin(sin(theta(i)))*180._sp/PI,latitude(nlats)),latitude(1)), var,dummy)
+				call polint(latitude(iloc:iloc+1), wind(iloc:iloc+1), &
+					min(max( asin(sin(theta(i)))*180._sp/PI, &
+					latitude(nlats)),latitude(1)), var,dummy)
 				
-			if((theta(i)*180._sp/pi>90._sp) .or. (theta(i)*180._sp/pi<-90._sp) ) var=-var
+				if((theta(i)*180._sp/pi>90._sp) .or. &
+					(theta(i)*180._sp/pi<-90._sp) ) var=-var
 
-			var=var+delta_omega*re*cos(theta(i))
+				var=var+delta_omega*re*cos(theta(i))
 			
-! 			
-			u_nudge(i)=var
-		enddo
+				u_nudge(i)=var
+			enddo
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			! ideal jet:                                                                 !
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			case (2) 
+			do i=1-o_halo,jpp+o_halo
+				u_nudge(i)=u_jet* exp(-0.5_sp*(theta(i)-theta_jet*pi/180._sp)**2._sp &
+				 				/ (h_jet*pi/180._sp)**2._sp )
+			enddo
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			case default
+				print *,'error initial_winds',initial_winds
+				stop
+		end select
+		
 		! calculate Coriolis param:
 		do i=1-o_halo,ipp+o_halo
 			f_cor(i,:)=2._sp*f*sin(theta)			
@@ -476,25 +501,63 @@
 		allocate(seed(1:k))
 		seed(:)=2
 		call random_seed(put=seed)
-		do j=1,jp
-			do i=1,ip
-				r=random_normal() ! from the Netlib
+		select case (initial_winds)
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			! saturn winds:                                                              !
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			case (1) 
+			do j=1,jp
+				do i=1,ip
+					r=random_normal() ! from the Netlib
 
-				if((i > ipstart) .and. (i <=ipstart+ipp) &
-					.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
+					if((i > ipstart) .and. (i <=ipstart+ipp) &
+						.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
 					
-					if ((theta(j-jpstart)*180._sp/PI) > 75._sp &
-					    .and. (theta(j-jpstart)*180._sp/PI) < 80._sp) then
-					    
-						height(i-ipstart,j-jpstart) = &
-							height(i-ipstart,j-jpstart) + &
-							r*1000.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
-								!abs(f_cor(i-ipstart,j-jpstart))/3e-4_sp
+						if ((theta(j-jpstart)*180._sp/PI) > 75._sp &
+							.and. (theta(j-jpstart)*180._sp/PI) < 80._sp) then
+						
+							height(i-ipstart,j-jpstart) = &
+								height(i-ipstart,j-jpstart) + &
+								r*1000.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
+									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_sp
+						endif
 					endif
-				endif
 
+				enddo
 			enddo
-		enddo
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			! ideal jet:                                                                 !
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			case (2) 
+			do j=1,jp
+				do i=1,ip
+					r=random_normal() ! from the Netlib
+
+					if((i > ipstart) .and. (i <=ipstart+ipp) &
+						.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
+					
+						if ((theta(j-jpstart)*180._sp/PI) > (theta_jet-h_jet*3._sp) &
+						.and. (theta(j-jpstart)*180._sp/PI) <(theta_jet+h_jet*3._sp)) then
+						
+							height(i-ipstart,j-jpstart) = &
+								height(i-ipstart,j-jpstart) + &
+								r*10.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
+									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_sp
+						endif
+					endif
+
+				enddo
+			enddo
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			case default
+				print *,'error initial_winds',initial_winds
+				stop
+		end select
+		
+			
 		deallocate(seed)
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!		
 

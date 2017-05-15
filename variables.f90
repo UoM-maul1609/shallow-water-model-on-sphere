@@ -46,7 +46,8 @@
             real(sp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &
-            			slat, nlat, slat_thresh, nlat_thresh, nudge_timescale
+            			slat, nlat, slat_thresh, nlat_thresh, nudge_timescale, &
+            			u_jet, theta_jet, h_jet
         end type namelist_input
 
 
