@@ -543,7 +543,7 @@
 						
 							height(i-ipstart,j-jpstart) = &
 								height(i-ipstart,j-jpstart) + &
-								r*10.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
+								r*1000.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
 									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_sp
 						endif
 					endif

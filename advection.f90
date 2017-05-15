@@ -376,7 +376,7 @@
 			  dq(1:ip,1:jp)
 			  
 		delsq(1:ip,1:jp)  = delsq(1:ip,1:jp) + &
-			1._sp/(re*recq(1:ip,1:jp)**2._sp)* &
+			1._sp/(recq(1:ip,1:jp)**2._sp)* &
 			( (f(2:ip+1,1:jp)-f(1:ip,1:jp))/dp1(1:ip,1:jp) - &
 			  (f(1:ip,1:jp)-f(0:ip-1,1:jp))/dp1(1:ip,0:jp-1) ) / &
 			  dp1(1:ip,1:jp)
