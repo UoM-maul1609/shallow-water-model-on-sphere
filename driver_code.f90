@@ -42,15 +42,20 @@
 	!>@param[in] cq - for efficiency
 	!>@param[in] dp1 - for efficiency
 	!>@param[in] dq - for efficiency
+	!>@param[in] recqdq - for efficiency
 	!>@param[in] u_nudge: wind to nudge to
 	!>@param[inout] new_file: flag for if this is a new file
 	!>@param[in] outputfile: netcdf output
 	!>@param[in] output_interval: interval for output (s)
 	!>@param[in] nudge: logical if we want to nudge
 	!>@param[in] nudge_tau: time-scale (s) for nudging
+	!>@param[in] subgrid_model - 1 is constant viscosity, 2 is smagorinsky approach
 	!>@param[in] viscous_dissipation: add dissipation term
 	!>@param[in] dissipate_h: add dissipation term to h-field
 	!>@param[in] vis: viscosity
+	!>@param[in] cvis: smagorinsky parameter
+	!>@param[in] vis_eq: viscosity in equatorial region (needed for stability)
+	!>@param[in] lat_eq: latitude north and south over which to apply vis_eq
 	!>@param[in] dims,id, world_process, ring_comm: mpi variables
     subroutine model_driver(ip,ipp, jp,jpp, ntim, f, &
 				re, g, rho, dphi, dtheta, dphin, dthetan, &
@@ -58,11 +63,12 @@
 				height, dt, dx, dy, x, y, &
 				phi, theta, phin, thetan, &
 				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
-    			recq, cq_s, cq, dp1, dq, &
+    			recq, cq_s, cq, dp1, dq,recqdq, &
 			    u_nudge,o_halo, &
 				ipstart, jpstart, coords, &
 				new_file,outputfile, output_interval, nudge, nudge_tau, &
-				viscous_dissipation, dissipate_h,vis, &
+				subgrid_model, viscous_dissipation, dissipate_h,vis, cvis, &
+				vis_eq, lat_eq, &
 				dims,id, world_process, rank, ring_comm)
 		use nrtype
 		use mpi_module
@@ -71,7 +77,8 @@
 		implicit none
 		logical, intent(inout) :: new_file
 		logical, intent(in) :: nudge, viscous_dissipation, dissipate_h
-		integer(i4b), intent(in) :: ip,ipp, jp,jpp, ntim, o_halo, ipstart, jpstart
+		integer(i4b), intent(in) :: ip,ipp, jp,jpp, ntim, o_halo, ipstart, jpstart, &
+									subgrid_model
 		integer(i4b), intent(in) :: id, world_process, ring_comm, rank
 		integer(i4b), dimension(2), intent(in) :: coords, dims
 		character (len=*), intent(in) :: outputfile
@@ -82,19 +89,19 @@
 		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(in) :: f_cor, hs, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
-    				recq, cq_s, cq, dp1, dq
+    				recq, cq_s, cq, dp1, dq, recqdq
 		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(inout) :: h, u, v, height
 		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(in) :: dx, dy, x, y
-		real(sp), intent(in) :: vis, nudge_tau
+		real(sp), intent(in) :: vis, nudge_tau, cvis, lat_eq, vis_eq
 					
 		! locals:		
 		integer(i4b) :: n, cur=1, j, error
 		real(sp) :: time, time_last_output, output_time
 		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
 				u_old, v_old, h_old
-		real(sp), dimension(1:ipp,1:jpp) :: delsq, vort
+		real(sp), dimension(1:ipp,1:jpp) :: delsq, vort, visco
 		
 
 		time_last_output=-output_interval
@@ -143,7 +150,7 @@
 			v_old=v
 			call lax_wendroff_ll(ipp,jpp,o_halo,dt,g,u,v,h,hs,re,&
 	    		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, f_cor, &
-    			recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s)	    		
+    			recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s)	    		
 ! 			call lax_wendroff_sphere(ipp,jpp,o_halo,dt,dx,dy,g,u,v,h,hs,re,theta,f_cor)
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -196,30 +203,69 @@
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+				
+				
+				
+				
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				! dissipate u                                                            !
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				call dissipation(ipp,jpp,o_halo,dt,0.5_sp*(u_old+u), delsq,re,&
 					theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 					recq, cq_s, dp1, dq)
-					
-					
-				u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*vis
+										
+				select case(subgrid_model)
+				case (1)
+					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*vis			
+				case (2)
+					call smagorinsky(ipp,jpp,o_halo,cvis,0.5_sp*(u_old+u),&
+									0.5_sp*(v_old+v),visco,re,recq, dp1, dq)
+					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*visco			
+				case default
+					print *,'error subgrid ',subgrid_model
+				end select
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
 				
+
+
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				! dissipate v                                                            !
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				call dissipation(ipp,jpp,o_halo,dt,0.5_sp*(v_old+v), delsq,re,&
 					theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 					recq, cq_s, dp1, dq)
-					
-					
-				v(1:ipp,1:jpp)=v(1:ipp,1:jpp)+dt*delsq*vis
-				do j=1,jpp
-					if((theta(j) >-60._sp*pi/180._sp) .and. &
-						 (theta(j) < 60._sp*pi/180._sp)) then
+								
+				select case(subgrid_model)
+				case (1)
+					v(1:ipp,1:jpp)=v(1:ipp,1:jpp)+dt*delsq*vis
+				case (2)
+					v(1:ipp,1:jpp)=v(1:ipp,1:jpp)+dt*delsq*visco			
+				case default
+					print *,'error subgrid ',subgrid_model
+				end select
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-						v(1:ipp,j)=v(1:ipp,j)+dt*delsq(1:ipp,j)*1e8* &
-							cos(theta(j)*1.5_sp)
+
+				do j=1,jpp
+					if((theta(j) >-lat_eq*pi/180._sp) .and. &
+						 (theta(j) < lat_eq*pi/180._sp)) then
+
+						v(1:ipp,j)=v(1:ipp,j)+dt*delsq(1:ipp,j)*vis_eq* &
+							cos(theta(j)*90._sp/lat_eq)
 					endif
 				enddo
+
+				
 					
 							
-				if (dissipate_h ) then
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				! dissipate h                                                            !
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				if (dissipate_h .and. (subgrid_model == 1)) then
 					!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 					! halo exchanges                                                     !
 					!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -233,6 +279,10 @@
 						
 					h(1:ipp,1:jpp)=h(1:ipp,1:jpp)+dt*delsq*vis
 				endif
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
 			endif	    		
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

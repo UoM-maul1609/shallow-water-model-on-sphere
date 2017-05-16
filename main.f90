@@ -137,6 +137,7 @@
 				grid1%phi, grid1%theta, grid1%phin, grid1%thetan, &
    				grid1%recqdp, grid1%recqdp_s, grid1%recqdq_s, grid1%redq_s, grid1%redq, &
     				grid1%recq, grid1%cq_s, grid1%cq, grid1%dp1, grid1%dq, &
+    				grid1%recqdq, &
  				grid1%u_nudge,grid1%o_halo, &
 				grid1%ipstart, grid1%jpstart, grid1%coords, &
 				nm1%inputfile, nm1%add_random_height_noise, &
@@ -174,11 +175,14 @@
 				grid1%phi, grid1%theta, grid1%phin, grid1%thetan, &
    				grid1%recqdp, grid1%recqdp_s, grid1%recqdq_s, grid1%redq_s, grid1%redq, &
     			grid1%recq, grid1%cq_s, grid1%cq, grid1%dp1, grid1%dq, &
+    			grid1%recqdq, &
 				grid1%u_nudge,grid1%o_halo, &
 				grid1%ipstart, grid1%jpstart, grid1%coords, &
 				io1%new_file, nm1%outputfile, nm1%output_interval, &
 				nm1%nudge,nm1%nudge_timescale, &
-				nm1%viscous_dissipation, nm1%dissipate_h,nm1%vis, &
+				nm1%subgrid_model, nm1%viscous_dissipation, &
+				nm1%dissipate_h,nm1%vis,nm1%cvis, &
+				nm1%vis_eq,nm1%lat_eq, &
 				mp1%dims,mp1%id, world_process, mp1%rank, mp1%ring_comm)
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

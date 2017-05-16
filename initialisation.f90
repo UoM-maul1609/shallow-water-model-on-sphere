@@ -51,6 +51,7 @@
 	!>@param[inout] cq - for efficiency
 	!>@param[inout] dp1 - for efficiency
 	!>@param[inout] dq - for efficiency
+	!>@param[inout] recqdq - for efficiency
 	!>@param[inout] u_nudge - wind to nudge to
 	!>@param[in] o_halo - number of halos required
 	!>@param[inout] ipstart - start of i indexing for this PE
@@ -87,6 +88,7 @@
 				phi, theta, phin, thetan, &
 				recqdp, recqdp_s, recqdq_s, redq_s,redq, &
 				recq, cq_s, cq, dp1, dq, &
+				recqdq, &
 				u_nudge, o_halo, ipstart, jpstart, coords, &
 				inputfile, add_random_height_noise, &
 				initially_geostrophic, initial_winds, &
@@ -112,7 +114,7 @@
     									f_cor, h, hs, u, v, height, &
     											dx, dy, x, y, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
-    				recq, cq_s, cq, dp1, dq
+    				recq, cq_s, cq, dp1, dq, recqdq
     	real(sp), intent(inout), allocatable, dimension(:) :: &
     									phi, theta, phin, thetan,u_nudge, &
     									dphi, dtheta, dphin, dthetan
@@ -232,6 +234,8 @@
 		allocate( dp1(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
 		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"
 		allocate( dq(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
+		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"	
+		allocate( recqdq(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
 		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"	
 
 		allocate( phi(1-o_halo:ipp+o_halo), STAT = AllocateStatus)
@@ -607,6 +611,7 @@
 			redq(:,j)=re*dtheta(j)
 
 			recq(:,j)=re*cos(theta(j))
+			recqdq(:,j)=re*cos(theta(j))*dtheta(j)
 			cq_s(:,j)=cos(thetan(j))
 			cq(:,j)=cos(theta(j))
 			dp1(:,j)=dphi(:)

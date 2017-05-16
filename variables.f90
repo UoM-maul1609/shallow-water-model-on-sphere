@@ -21,7 +21,7 @@
             real(sp), dimension(:,:), allocatable :: f_cor, h, hs, u,v, height, &
             										 dx, dy, x, y, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
-    				recq, cq_s, cq, dp1, dq
+    				recq, cq_s, cq, dp1, dq, recqdq
             										 
             real(sp), dimension(:), allocatable :: phi, theta, phin, thetan, u_nudge, &
             	dphi, dtheta, dphin, dthetan
@@ -42,12 +42,12 @@
             			initially_geostrophic, &
             			viscous_dissipation, &
             			dissipate_h, nudge, restart
-            integer(i4b) :: initial_winds, ip, jp
+            integer(i4b) :: initial_winds, ip, jp, subgrid_model
             real(sp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &
             			slat, nlat, slat_thresh, nlat_thresh, nudge_timescale, &
-            			u_jet, theta_jet, h_jet
+            			u_jet, theta_jet, h_jet, cvis, vis_eq, lat_eq
         end type namelist_input
 
 

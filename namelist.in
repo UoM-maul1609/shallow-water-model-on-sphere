@@ -1,9 +1,10 @@
 
  &run_vars
  	nm1%inputfile  = 'saturn_winds_vs_latitude.nc'
-	nm1%outputfile = '/tmp/output_n.nc',
+	nm1%outputfile = '/tmp/output.nc',
 	nm1%add_random_height_noise=.true.,
 	nm1%initially_geostrophic=.true.,
+	nm1%subgrid_model=2, ! 1 = constant viscosity, 2=smagorinsky
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.false.,
 	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
@@ -17,6 +18,9 @@
 	nm1%wind_shift=0.0,
 	nm1%wind_reduce=0.0,
 	nm1%vis=0.e6,
+	nm1%cvis=0.2, ! usually between 0.1 and 0.2
+	nm1%vis_eq=1.e8, ! viscosity for v over equator region
+	nm1%lat_eq=20., ! latitude north and south over which to apply vis_eq
 	nm1%runtime=7776000.,
 	nm1%dt=60.,
 	nm1%output_interval=57600.,
