@@ -46,7 +46,9 @@
 		real(sp), intent(inout), &
 			 dimension(1-o_halo:o_halo+ipp,1-o_halo:o_halo+jpp) :: array
 		
-		integer(i4b) :: error, nbrleft, nbrright, nbrbottom, nbrtop, tag1
+		integer(i4b) :: error, nbrleft, nbrright, nbrbottom, nbrtop, tag1, &
+						request
+		integer(i4b), dimension(MPI_STATUS_SIZE) :: status
 		
 		! Find the processors neighbours
 		call MPI_CART_SHIFT( comm2d, 0, 1, nbrleft, nbrright, error)	
@@ -59,11 +61,12 @@
 		if (nbrleft /= id) then
 			tag1=010
 			! send from left (specify destination):
-			call MPI_Send(array(ipp+1-o_halo:ipp,1:jpp), jpp, MPI_REAL8, nbrright, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+			call MPI_Issend(array(ipp+1-o_halo:ipp,1:jpp), jpp, MPI_REAL8, nbrright, &
+				tag1, MPI_COMM_WORLD, request,error)
 			! receive from left (specify source):
 			call MPI_Recv(array(1-o_halo:0,1:jpp), jpp, MPI_REAL8, nbrleft, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, MPI_COMM_WORLD, status,error)
+			call MPI_Wait(request, status, error)
 		else
 			array(1-o_halo:0,1:jpp)=array(ipp+1-o_halo:ipp,1:jpp)
 		endif
@@ -73,11 +76,12 @@
 		if (nbrright /= id) then
 			tag1=010
 			! send from right (specify destination):
-			call MPI_Send(array(1:o_halo,1:jpp), jpp, MPI_REAL8, nbrleft, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+			call MPI_Issend(array(1:o_halo,1:jpp), jpp, MPI_REAL8, nbrleft, &
+				tag1, MPI_COMM_WORLD, request,error)
 			! receive from right (specify source):
 			call MPI_Recv(array(ipp+1:ipp+o_halo,1:jpp), jpp, MPI_REAL8, nbrright, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, MPI_COMM_WORLD, status,error)
+			call MPI_Wait(request, status, error)
 		else
 			array(ipp+1:ipp+o_halo,1:jpp)=array(1:o_halo,1:jpp)
 		endif
@@ -87,12 +91,13 @@
 			tag1=110
 			if(nbrtop /= -1) then
 				! send from top (specify destination):
-				call MPI_Send(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPI_REAL8, nbrtop, &
-					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				call MPI_Issend(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPI_REAL8, nbrtop, &
+					tag1, MPI_COMM_WORLD, request,error)
 			endif
 			! receive from top (specify source):
 			call MPI_Recv(array(1:ipp,1-o_halo:0), ipp, MPI_REAL8, nbrbottom, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, MPI_COMM_WORLD, status,error)
+			call MPI_Wait(request, status, error)
 		else
 !			array(1:ipp,1-o_halo:0)=array(1:ipp,jpp-o_halo:jpp)
 		endif
@@ -101,12 +106,13 @@
 			tag1=110
 			if(nbrbottom /= -1) then
 				! send from bottom (specify destination):
-				call MPI_Send(array(1:ipp,1:o_halo), ipp, MPI_REAL8, nbrbottom, &
-					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				call MPI_Issend(array(1:ipp,1:o_halo), ipp, MPI_REAL8, nbrbottom, &
+					tag1, MPI_COMM_WORLD, request,error)
 			endif
 			! receive from bottom (specify source):
 			call MPI_Recv(array(1:ipp,jpp+1:jpp+o_halo), ipp, MPI_REAL8, nbrtop, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, MPI_COMM_WORLD, status,error)
+			call MPI_Wait(request, status, error)
 		else
 !			array(1:ipp,jpp+1:jpp+o_halo)=array(1:ipp,1:o_halo)
 		endif
@@ -144,22 +150,23 @@
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! essentially blocks until all processors catch up					   !
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		if (id .ne. world_process ) then
-			! processors except 0 are waiting to recv from previous pe:
-			call MPI_Recv(mesg, len(mesg), MPI_CHARACTER, id-1, &
-				tag1, ring_comm, MPI_STATUS_IGNORE,error)
-		endif
-		if ( (world_process+1) .ne. rank ) then ! so we don't send a message to ourselves!
-			! processor 0 will send here first (as not waiting)
-			call MPI_Send(mesg, len(mesg), MPI_CHARACTER, mod(id+1,rank), &
-					tag1, ring_comm, error)
-			! lastly receive message from last process
-			if(id == world_process) then
-				! processor 0 waiting to recv from last pe in ring
-				call MPI_Recv(mesg, len(mesg), MPI_CHARACTER, rank-1, &
-					tag1, ring_comm, MPI_STATUS_IGNORE,error)
-			endif
-		endif
+        call MPI_Barrier(ring_comm, error)
+! 		if (id .ne. world_process ) then
+! 			! processors except 0 are waiting to recv from previous pe:
+! 			call MPI_Recv(mesg, len(mesg), MPI_CHARACTER, id-1, &
+! 				tag1, ring_comm, MPI_STATUS_IGNORE,error)
+! 		endif
+! 		if ( (world_process+1) .ne. rank ) then ! so we don't send a message to ourselves!
+! 			! processor 0 will send here first (as not waiting)
+! 			call MPI_Send(mesg, len(mesg), MPI_CHARACTER, mod(id+1,rank), &
+! 					tag1, ring_comm, error)
+! 			! lastly receive message from last process
+! 			if(id == world_process) then
+! 				! processor 0 waiting to recv from last pe in ring
+! 				call MPI_Recv(mesg, len(mesg), MPI_CHARACTER, rank-1, &
+! 					tag1, ring_comm, MPI_STATUS_IGNORE,error)
+! 			endif
+! 		endif
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	end subroutine block_ring
 	

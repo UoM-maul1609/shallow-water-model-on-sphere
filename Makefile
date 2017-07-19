@@ -1,10 +1,16 @@
 DEBUG = -fbounds-check -g 
 OPT    =-O3
 
-NETCDFLIB=-L /Users/mccikpc2/Dropbox/programming/netcdf-4.4.4-mac/lib/  \
-          -L /Users/mccikpc2/Dropbox/programming/netcdf-4.4.1.1-mac/lib/
-NETCDFINC=/usr/include/
-NETCDFMOD= /Users/mccikpc2/Dropbox/programming/netcdf-4.4.4-mac/include/
+# these three lines should be edited for your system. On systems 
+# that do not have separate fortran and c libraries, set NETCDF_FOR and NETCDF_C
+# to the same, and set NETCDF_LIB to -lnetcdf (i.e. without the extra f)
+NETCDF_FOR=/Users/mccikpc2/Dropbox/programming/netcdf-4.4.4-mac/
+NETCDF_C=/Users/mccikpc2/Dropbox/programming/netcdf-4.4.1.1-mac/
+NETCDF_LIB=-lnetcdff 
+
+NETCDFLIB=-L ${NETCDF_FOR}/lib/  \
+          -L ${NETCDF_C}/lib/
+NETCDFMOD= ${NETCDF_FOR}/include/
 
 
 FOR = mpif90 -c  
@@ -21,7 +27,7 @@ main.exe	:  model_lib.a  main.$(OBJ) variables.$(OBJ) initialisation.$(OBJ) \
 				mpi_module.$(OBJ) driver_code.$(OBJ) advection.$(OBJ)
 	$(FOR2) $(FFLAGS2)main.exe main.$(OBJ) variables.$(OBJ) initialisation.$(OBJ) \
 			 mpi_module.$(OBJ) driver_code.$(OBJ) advection.$(OBJ) -lm model_lib.a \
-		${NETCDFLIB} -I ${NETCDFMOD} -lnetcdff $(DEBUG)
+		${NETCDFLIB} -I ${NETCDFMOD} ${NETCDF_LIB} $(DEBUG)
 model_lib.a	:   nrtype.$(OBJ) nr.$(OBJ) nrutil.$(OBJ) locate.$(OBJ) polint.$(OBJ) \
 				rkqs.$(OBJ) rkck.$(OBJ) odeint.$(OBJ) zbrent.$(OBJ) \
 				hygfx.$(OBJ)  random.$(OBJ)
@@ -55,16 +61,16 @@ variables.$(OBJ) : variables.f90
 mpi_module.$(OBJ) : mpi_module.f90
 	$(FOR) mpi_module.f90 $(FFLAGS)mpi_module.$(OBJ)
 initialisation.$(OBJ) : initialisation.f90 random.$(OBJ) mpi_module.$(OBJ)
-	$(FOR) initialisation.f90 -I ${NETCDFINC} -I ${NETCDFMOD} \
+	$(FOR) initialisation.f90 -I ${NETCDFMOD} \
 			$(FFLAGS)initialisation.$(OBJ)
 driver_code.$(OBJ) : driver_code.f90 advection.$(OBJ) mpi_module.$(OBJ)
-	$(FOR) driver_code.f90 -I ${NETCDFINC} -I ${NETCDFMOD} \
+	$(FOR) driver_code.f90  -I ${NETCDFMOD} \
 			$(FFLAGS)driver_code.$(OBJ)
 advection.$(OBJ) : advection.f90
 	$(FOR) advection.f90  $(FFLAGS)advection.$(OBJ)
 main.$(OBJ)   : main.f90 variables.$(OBJ) mpi_module.$(OBJ) initialisation.$(OBJ) \
 				driver_code.$(OBJ) advection.$(OBJ)
-	$(FOR)  main.f90 -I ${NETCDFINC} -I ${NETCDFMOD}  $(FFLAGS)main.$(OBJ) 
+	$(FOR)  main.f90 -I ${NETCDFMOD}  $(FFLAGS)main.$(OBJ) 
 
 clean :
 	rm *.exe  *.o *.mod *~ \

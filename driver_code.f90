@@ -97,7 +97,7 @@
 		real(sp), intent(in) :: vis, nudge_tau, cvis, lat_eq, vis_eq
 					
 		! locals:		
-		integer(i4b) :: n, cur=1, j, error
+		integer(i4b) :: n, cur=1, j, error, rank2
 		real(sp) :: time, time_last_output, output_time
 		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
 				u_old, v_old, h_old
@@ -106,6 +106,7 @@
 
 		time_last_output=-output_interval
 		output_time=output_interval
+		rank2=dims(1)*dims(2)
 
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! time-loop                                                                      !
@@ -132,7 +133,7 @@
 							o_halo, &
 							time,phi,theta, &
 							u_nudge, f_cor, height, h, u, v, vort, &
-							id, world_process, rank, ring_comm)
+							id, world_process, rank2, ring_comm)
 				time_last_output=time
 				cur=cur+1
 			endif
@@ -700,6 +701,21 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
+		if (rank > 1 ) then
+			! send to world_process to complete ring
+			tag1=2010
+			if( ((id+1).eq.rank) ) then
+				call MPI_Send(var, 1, MPI_LOGICAL, world_process, &
+							tag1, MPI_COMM_WORLD, error)			
+			endif
+
+
+			! receive at world_process to complete ring
+			if((id==world_process) ) then
+				call MPI_Recv(var,1, MPI_LOGICAL,rank-1, &
+					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+			endif
+		endif	
 	
 
 

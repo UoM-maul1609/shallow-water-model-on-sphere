@@ -21,7 +21,7 @@
 	nm1%cvis=0.2, ! usually between 0.1 and 0.2
 	nm1%vis_eq=1.e8, ! viscosity for v over equator region
 	nm1%lat_eq=20., ! latitude north and south over which to apply vis_eq
-	nm1%runtime=7776000.,
+	nm1%runtime= 7776000.,
 	nm1%dt=60.,
 	nm1%output_interval=57600.,
 	nm1%grav=10.44,		! gravity
