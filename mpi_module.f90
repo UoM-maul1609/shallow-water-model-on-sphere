@@ -89,11 +89,9 @@
 		
 		if ((nbrtop /= id)) then
 			tag1=110
-			if(nbrtop /= -1) then
-				! send from top (specify destination):
-				call MPI_Issend(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPI_REAL8, nbrtop, &
-					tag1, MPI_COMM_WORLD, request,error)
-			endif
+			! send from top (specify destination):
+			call MPI_Issend(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPI_REAL8, nbrtop, &
+				tag1, MPI_COMM_WORLD, request,error)
 			! receive from top (specify source):
 			call MPI_Recv(array(1:ipp,1-o_halo:0), ipp, MPI_REAL8, nbrbottom, &
 				tag1, MPI_COMM_WORLD, status,error)
@@ -104,11 +102,9 @@
 
 		if ((nbrbottom /= id)) then
 			tag1=110
-			if(nbrbottom /= -1) then
-				! send from bottom (specify destination):
-				call MPI_Issend(array(1:ipp,1:o_halo), ipp, MPI_REAL8, nbrbottom, &
-					tag1, MPI_COMM_WORLD, request,error)
-			endif
+			! send from bottom (specify destination):
+			call MPI_Issend(array(1:ipp,1:o_halo), ipp, MPI_REAL8, nbrbottom, &
+				tag1, MPI_COMM_WORLD, request,error)
 			! receive from bottom (specify source):
 			call MPI_Recv(array(1:ipp,jpp+1:jpp+o_halo), ipp, MPI_REAL8, nbrtop, &
 				tag1, MPI_COMM_WORLD, status,error)
