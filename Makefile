@@ -4,8 +4,8 @@ OPT    =-O3
 # these three lines should be edited for your system. On systems 
 # that do not have separate fortran and c libraries, set NETCDF_FOR and NETCDF_C
 # to the same, and set NETCDF_LIB to -lnetcdf (i.e. without the extra f)
-NETCDF_FOR=/Users/mccikpc2/Dropbox/programming/netcdf-4.4.4-mac/
-NETCDF_C=/Users/mccikpc2/Dropbox/programming/netcdf-4.4.1.1-mac/
+#NETCDF_FOR=/Users/mccikpc2/Dropbox/programming/netcdf-4.4.4-mac/
+#NETCDF_C=/Users/mccikpc2/Dropbox/programming/netcdf-4.4.1.1-mac/
 NETCDF_LIB=-lnetcdff 
 
 NETCDFLIB=-L ${NETCDF_FOR}/lib/  \

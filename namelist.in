@@ -9,7 +9,7 @@
 	nm1%dissipate_h=.false.,
 	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
 	nm1%u_jet=50.,  ! speed of jet
-	nm1%theta_jet=76., ! latitude of jet
+	nm1%theta_jet=77., ! latitude of jet
 	nm1%h_jet=1.0, ! standard deviation of jet (width)
 	nm1%nudge=.true.,
 	nm1%nudge_timescale=6.e5, ! default 6e5 seconds
