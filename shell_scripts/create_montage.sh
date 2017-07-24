@@ -8,7 +8,7 @@ do
 var=$(printf "%03d" $i)
 montage /tmp/pics/output_00_$var.png /tmp/pics/output_01_$var.png \
 	/tmp/pics/output_02_$var.png /tmp/pics/output_03_$var.png /tmp/pics/output_04_$var.png \
-	/tmp/pics/output_05_$var.png -geometry +0+0 /tmp/output_$var.png
+	/tmp/pics/output_05_$var.png -geometry +0+0 /tmp/pics/output_$var.png
 
 done
 
