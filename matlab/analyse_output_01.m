@@ -12,5 +12,5 @@ fileNames={'/tmp/output.nc'};
 u_jet=[100.];
 figure;
 fourier_wave_number(fileNames,u_jet);
-normal_modes_compare(u_jet);
+normal_modes_compare(u_jet,1);
 title('Model (circles) vs Linear theory (lines)');

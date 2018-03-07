@@ -1,4 +1,4 @@
-function normal_modes(u_jets)
+function normal_modes_compare(u_jets,flag)
 % normal mode analysis of a gaussian jet - see Mak, Atmospheric Dynamics
 
 
@@ -90,10 +90,30 @@ for j=1:length(u_jets)
         clear i;
 
     end
-
-    h=plot(1:n_ks,...
-        (-sigmas_max_i(:,1)./repmat(2.*pi.*[1:n_ks]'./x_len,[1 1])) ...
-        .*86400.*365.25./x_len);
+    if flag==1
+        h=plot(1:n_ks,...
+            (-sigmas_max_i(:,1)./repmat(2.*pi.*[1:n_ks]'./x_len,[1 1])) ...
+            .*86400.*365.25./x_len);
+    elseif flag==2
+        h=plot(1:n_ks,...
+            sigmas_max(:,1));
+%         h2=plot(1:n_ks,...
+%             sum(sigmas_max(:,:),2),'--');
+        hold on;
+        h2=plot(1:n_ks,...
+            sigmas_max(:,2),'--');
+        h=[h, h2];
+        hold on;
+    elseif flag==3
+        h=plot(1:n_ks,...
+            (-sigmas_max_i(:,1)./(2.*pi.*[1:n_ks]'./x_len)));
+        hold on;
+        h2=plot(1:n_ks,...
+            (-sigmas_max_i(:,2)./(2.*pi.*[1:n_ks]'./x_len)),'--');
+        h=[h, h2];
+        hold on;
+    end
+    
     if ( length(u_jets) > 1)
         row=interp1(u1,1:cmap_lev,u_jets(j),'nearest');
     else

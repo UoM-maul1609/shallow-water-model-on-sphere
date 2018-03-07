@@ -34,7 +34,7 @@
     !>
 	!> <br><br>
 	!> compile using the Makefile (note requires netcdf) and then run using: <br>
-	!> ./main.exe namelist.in
+	!> mpiexec -n 4 ./main.exe namelist.in
 	!> <br><br>
 	!> (namelist used for initialisation).
 	!> <br><br>
