@@ -21,8 +21,9 @@ jp=100;
 lat_high=85;
 lat_low=65;
 re=5.4155760e7;
-h_jet=1.;
-lat_jet=77.;
+%re=5.8232e7;
+h_jet=1.5;
+lat_jet=78;
 
 
 for j=1:length(u_jets)
@@ -31,7 +32,7 @@ for j=1:length(u_jets)
 
     % y-grid
     y=linspace(re*lat_low*pi./180,re*lat_high*pi./180,jp);
-    x_len=2.*pi.*cos((70).*pi./180).*re;
+    x_len=2.*pi.*cos((lat_jet).*pi./180).*re;
 
     x=linspace(0,x_len,ip);
 
@@ -47,12 +48,12 @@ for j=1:length(u_jets)
 
     % beta (df/dy)
     beta1=2.*2.*pi./T.*cos(y./re)./re;
-    n_ks=18;
+    n_ks=36;
     sigma_max=zeros(n_ks,1);
-    sigmas_max=zeros(n_ks,2);
-    sigmas_max_i=zeros(n_ks,2);
-    sigmas_min=zeros(n_ks,2);
-    sigmas_min_i=zeros(n_ks,2);
+    sigmas_max=zeros(n_ks,3);
+    sigmas_max_i=zeros(n_ks,3);
+    sigmas_min=zeros(n_ks,3);
+    sigmas_min_i=zeros(n_ks,3);
     % now set-up matrix problem
     for n=1:n_ks
     %     n=5;
@@ -81,12 +82,12 @@ for j=1:length(u_jets)
 
         sigma_max(n)=max(real(sigma1));
         [a,ii]=sort(real(sigma1),'descend');
-        sigmas_max(n,1:2)=a(1:2);
-        sigmas_max_i(n,1:2)=imag(sigma1(ii(1:2)));
+        sigmas_max(n,1:3)=a(1:3);
+        sigmas_max_i(n,1:3)=imag(sigma1(ii(1:3)));
 
         [a,ii]=sort(real(sigma1),'ascend');
-        sigmas_min(n,1:2)=a(1:2);
-        sigmas_min_i(n,1:2)=imag(sigma1(ii(1:2)));
+        sigmas_min(n,1:3)=a(1:3);
+        sigmas_min_i(n,1:3)=imag(sigma1(ii(1:3)));
         clear i;
 
     end
@@ -102,7 +103,10 @@ for j=1:length(u_jets)
         hold on;
         h2=plot(1:n_ks,...
             sigmas_max(:,2),'--');
-        h=[h, h2];
+        hold on;
+        h3=plot(1:n_ks,...
+            sigmas_max(:,3),':');
+        h=[h, h2, h3];
         hold on;
     elseif flag==3
         h=plot(1:n_ks,...
