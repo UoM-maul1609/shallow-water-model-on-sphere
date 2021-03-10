@@ -19,9 +19,8 @@ FOR2 = mpif90
 AR = ar 
 RANLIB = ranlib 
 OBJ = o
-FFLAGS = $(OPT)  $(DEBUG)  -o 
-FFLAGS2 =  $(DEBUG) -O0 -o 
-
+FFLAGS = $(OPT)  $(DEBUG) -w -fallow-argument-mismatch -o 
+FFLAGS2 =  $(DEBUG) -w -fallow-argument-mismatch -O3 -o 
 
 main.exe	:  model_lib.a  main.$(OBJ) variables.$(OBJ) initialisation.$(OBJ) \
 				mpi_module.$(OBJ) driver_code.$(OBJ) advection.$(OBJ)
