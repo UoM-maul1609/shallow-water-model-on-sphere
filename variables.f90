@@ -3,7 +3,7 @@
 	!>@brief
 	!>variables for the shallow water model on sphere
     module variables
-    use nrtype
+    use numerics_type
 	!>@author
 	!>Paul J. Connolly, The University of Manchester
 	!>@brief
@@ -17,13 +17,13 @@
             ! variables for grid
             integer(i4b) :: ip, jp, ntim, o_halo, ipstart, jpstart
             integer(i4b), dimension(2) :: coords
-            real(sp) :: f, re, g, rho, dt
-            real(sp), dimension(:,:), allocatable :: f_cor, h, hs, u,v, height, &
+            real(wp) :: f, re, g, rho, dt
+            real(wp), dimension(:,:), allocatable :: f_cor, h, hs, u,v, height, &
             										 dx, dy, x, y, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
     				recq, cq_s, cq, dp1, dq, recqdq
             										 
-            real(sp), dimension(:), allocatable :: phi, theta, phin, thetan, u_nudge, &
+            real(wp), dimension(:), allocatable :: phi, theta, phin, thetan, u_nudge, &
             	dphi, dtheta, dphin, dthetan
         end type grid
 
@@ -43,7 +43,7 @@
             			viscous_dissipation, &
             			dissipate_h, nudge, restart
             integer(i4b) :: initial_winds, ip, jp, subgrid_model
-            real(sp) :: wind_factor, wind_shift, wind_reduce, vis, &
+            real(wp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &
             			slat, nlat, slat_thresh, nlat_thresh, nudge_timescale, &
@@ -56,7 +56,7 @@
 		!>variables for mpi
         type mpi_vars
         	integer(i4b) :: rank, id, error, dx, dy
-        	real(sp) :: wtime
+        	real(wp) :: wtime
         	logical, dimension(2) :: periods
         	logical :: reorder=.true.
         	integer(i4b) :: ndim=2

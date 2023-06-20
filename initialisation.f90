@@ -3,7 +3,7 @@
 	!>@brief
 	!>initialisation for the shallow water model
     module initialisation
-    use nrtype
+    use numerics_type
 
     private
     public :: allocate_and_set
@@ -99,23 +99,23 @@
 				rotation_period_hours, scale_height, slat, nlat, &
 				slat_thresh, nlat_thresh, dims, id, comm2d)
 				
-		use nrtype
+		use numerics_type
 		use mpi
 		use netcdf
-		use nr, only : locate, polint
+		use numerics, only : find_pos, poly_int
 		use random, only : random_normal
 		use mpi_module
 		
 		implicit none
 		! grid variables to be set
 		integer(i4b), intent(inout) :: ipp, jpp, ntim, o_halo
-    	real(sp), intent(inout) :: f, re, g, rho, dt
-    	real(sp), intent(inout), allocatable, dimension(:,:) :: &
+    	real(wp), intent(inout) :: f, re, g, rho, dt
+    	real(wp), intent(inout), allocatable, dimension(:,:) :: &
     									f_cor, h, hs, u, v, height, &
     											dx, dy, x, y, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
     				recq, cq_s, cq, dp1, dq, recqdq
-    	real(sp), intent(inout), allocatable, dimension(:) :: &
+    	real(wp), intent(inout), allocatable, dimension(:) :: &
     									phi, theta, phin, thetan,u_nudge, &
     									dphi, dtheta, dphin, dthetan
 
@@ -123,12 +123,12 @@
 		character (len=*), intent(in) :: inputfile
 		logical, intent(in) :: add_random_height_noise, initially_geostrophic
 		integer(i4b), intent(in) :: initial_winds, ip, jp
-		real(sp), intent(in) :: wind_factor, wind_shift, wind_reduce, runtime, &
+		real(wp), intent(in) :: wind_factor, wind_shift, wind_reduce, runtime, &
 							dt_nm, grav, rho_nm, re_nm, &
 							rotation_period_hours, scale_height, &
 							slat_thresh, nlat_thresh, &
 							u_jet, theta_jet, h_jet
-		real(sp), intent(inout) :: slat, nlat
+		real(wp), intent(inout) :: slat, nlat
 		integer(i4b), dimension(2), intent(in) :: dims
 		integer(i4b), dimension(2), intent(inout) :: coords
 		integer(i4b), intent(inout) :: ipstart, jpstart
@@ -136,11 +136,11 @@
 		! locals
 		integer(i4b) :: iloc, error, AllocateStatus, ncid, varid1,varid2, dimid, nlats, &
 						i, j
-		real(sp), dimension(:), allocatable :: latitude, wind
-		real(sp) :: var, dummy, delta_omega, slat_thresh2, nlat_thresh2
+		real(wp), dimension(:), allocatable :: latitude, wind
+		real(wp) :: var, dummy, delta_omega, slat_thresh2, nlat_thresh2
 		! for random number:
-		real(sp) :: r
-		real(sp), dimension(10,10) :: rs
+		real(wp) :: r
+		real(wp), dimension(10,10) :: rs
 		integer(i4b) :: k, nbottom, ntop, tag1
 		integer(i4b), allocatable, dimension(:) :: seed
 		
@@ -158,7 +158,7 @@
 
 		! 2. scalar formulae:
 		ntim=ceiling(runtime/dt)
-		f=2._sp*PI / (rotation_period_hours*3600._sp)
+		f=2._wp*PI / (rotation_period_hours*3600._wp)
 		
 		! 3. arrays:
 
@@ -172,13 +172,13 @@
 ! 		print *,'Coords of ',id,' are ',coords
 
 		! number of grid points in all but last:
-		ipp = floor(real(ip,sp)/real(dims(1),sp)) 
+		ipp = floor(real(ip,wp)/real(dims(1),wp)) 
 		ipstart = ipp*(coords(1))     
 		if(coords(1) == (dims(1)-1)) then
 			ipp=ip-(dims(1)-1)*ipp ! number of grid points in last
 		endif
 		! number of grid points in all but last:
-		jpp = floor(real(jp,sp)/real(dims(2),sp))      
+		jpp = floor(real(jp,wp)/real(dims(2),wp))      
 		jpstart = jpp*(coords(2))     
 		if(coords(2) == (dims(2)-1)) then
 			jpp=jp-(dims(2)-1)*jpp ! number of grid points in last
@@ -301,26 +301,26 @@
 
 
 		! interpolate to grid, do finite diffs, pass halos, etc
-		dphi=(2._sp*PI) / real(ip-1,sp) ! lon
-		dphin=(2._sp*PI) / real(ip-1,sp) ! lon
+		dphi=(2._wp*PI) / real(ip-1,wp) ! lon
+		dphin=(2._wp*PI) / real(ip-1,wp) ! lon
 
 		! set up longitude array:
 		phi=dphi(1)*(/(i,i=ipstart+1-o_halo-1,ipstart+ipp+o_halo-1)/)
-		phin=phi+dphi/2._sp
+		phin=phi+dphi/2._wp
 
 		nlat=min(nlat,nlat_thresh)
 		slat=max(slat,slat_thresh)
 			
 		! latitude array:	
 		dtheta=(nlat-slat) &
-				/ real(jp-1,sp) * PI/180._sp  ! lat
+				/ real(jp-1,wp) * PI/180._wp  ! lat
 				
 		! deal with singularity at the poles:
-! 		if((coords(2) == (dims(2)-1))  .and. (nlat .gt. 0._sp)) then
-! 			dtheta(jpp) = 2._sp*(90._sp-nlat)*PI/180._sp
+! 		if((coords(2) == (dims(2)-1))  .and. (nlat .gt. 0._wp)) then
+! 			dtheta(jpp) = 2._wp*(90._wp-nlat)*PI/180._wp
 ! 		endif
-! 		if((coords(2) == 0)  .and. (slat .lt. 0._sp)) then
-! 			dtheta(0) = 2._sp*(90._sp+slat)*PI/180._sp
+! 		if((coords(2) == 0)  .and. (slat .lt. 0._wp)) then
+! 			dtheta(0) = 2._wp*(90._wp+slat)*PI/180._wp
 ! 		endif
 				
 
@@ -337,7 +337,7 @@
 		endif
 
 		if(coords(2) == 0) then
-			theta(0) = slat*PI/180._sp-dtheta(0)
+			theta(0) = slat*PI/180._wp-dtheta(0)
 		endif
 
 		do i=1,jpp+o_halo
@@ -347,14 +347,14 @@
 		if(ntop .ne. -1) then
 			tag1=001
 			call MPI_Send(theta(jpp), 1, MPI_REAL8, ntop, &
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, MPI_COMM_WORLD,error)
 		endif		
-! 		theta=dtheta(10)*(/(i,i=jpstart+1-o_halo-1,jpstart+jpp+o_halo-1)/) + slat*PI/180._sp
+! 		theta=dtheta(10)*(/(i,i=jpstart+1-o_halo-1,jpstart+jpp+o_halo-1)/) + slat*PI/180._wp
 		
 		
 
 		
-		thetan=theta+dtheta/2._sp
+		thetan=theta+dtheta/2._wp
 		do i=1-o_halo,jpp
 			dthetan(i)=thetan(i+1)-thetan(i)
 		enddo
@@ -362,7 +362,7 @@
 		! if this is the top then set dtheta:
 
 		if(ntop == -1 ) then
-			dthetan(jpp+1)=2._sp*(90._sp*PI/180._sp -dthetan(jpp))
+			dthetan(jpp+1)=2._wp*(90._wp*PI/180._wp -dthetan(jpp))
 		endif 
 		if(ntop /= -1 ) then
 			call MPI_Recv(dthetan(jpp+o_halo), 1, MPI_REAL8, ntop, &
@@ -370,9 +370,9 @@
 		endif 
 		if(nbottom /= -1 ) then
 			call MPI_Send(dthetan(1), 1, MPI_REAL8, nbottom, &
-					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+					tag1, MPI_COMM_WORLD,error)
 		endif 	
-! 		dthetan=(nlat-slat) / real(jp-1,sp) * PI/180._sp  ! lat
+! 		dthetan=(nlat-slat) / real(jp-1,wp) * PI/180._wp  ! lat
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -382,19 +382,19 @@
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			case (1) 
 			! interpolate winds to u_nudge
-			delta_omega=2._sp*PI/(3600._sp)*(1._sp/10.656_sp-1._sp/rotation_period_hours)
+			delta_omega=2._wp*PI/(3600._wp)*(1._wp/10.656_wp-1._wp/rotation_period_hours)
 			do i=1-o_halo,jpp+o_halo
-				iloc=locate(latitude(1:nlats),asin(sin(theta(i)))*180._sp/PI)
+				iloc=find_pos(latitude(1:nlats),asin(sin(theta(i)))*180._wp/PI)
 				iloc=min(nlats-1,iloc)
 				iloc=max(1,iloc)
 				! linear interp theta
 
-				call polint(latitude(iloc:iloc+1), wind(iloc:iloc+1), &
-					min(max( asin(sin(theta(i)))*180._sp/PI, &
+				call poly_int(latitude(iloc:iloc+1), wind(iloc:iloc+1), &
+					min(max( asin(sin(theta(i)))*180._wp/PI, &
 					latitude(nlats)),latitude(1)), var,dummy)
 				
-				if((theta(i)*180._sp/pi>90._sp) .or. &
-					(theta(i)*180._sp/pi<-90._sp) ) var=-var
+				if((theta(i)*180._wp/pi>90._wp) .or. &
+					(theta(i)*180._wp/pi<-90._wp) ) var=-var
 
 				var=var+delta_omega*re*cos(theta(i))
 			
@@ -407,8 +407,8 @@
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			case (2) 
 			do i=1-o_halo,jpp+o_halo
-				u_nudge(i)=u_jet* exp(-0.5_sp*(theta(i)-theta_jet*pi/180._sp)**2._sp &
-				 				/ (h_jet*pi/180._sp)**2._sp )
+				u_nudge(i)=u_jet* exp(-0.5_wp*(theta(i)-theta_jet*pi/180._wp)**2._wp &
+				 				/ (h_jet*pi/180._wp)**2._wp )
 			enddo
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -419,7 +419,7 @@
 		
 		! calculate Coriolis param:
 		do i=1-o_halo,ipp+o_halo
-			f_cor(i,:)=2._sp*f*sin(theta)			
+			f_cor(i,:)=2._wp*f*sin(theta)			
 		enddo
 ! 		if(coords(2)==0) f_cor(:,1-o_halo)=-f_cor(:,1-o_halo)
 ! 		if(coords(2)==dims(2)-1) f_cor(:,jpp+o_halo)=-f_cor(:,jpp+o_halo)
@@ -441,13 +441,13 @@
 		
 		
 		! set u and v:
-		v(:,:)=0._sp
+		v(:,:)=0._wp
 		do j=1-o_halo,jpp+o_halo
 			u(:,j)=u_nudge(j)
 		enddo
 		
 		! set surface to zero.
-		hs(:,:)=0._sp
+		hs(:,:)=0._wp
 
 
 
@@ -477,7 +477,7 @@
 		
 		do j=jpp,0,-1
 			height(:,j)=height(:,j+1)+ &	
-					0.25_sp*(f_cor(:,j+1)+f_cor(:,j))* &
+					0.25_wp*(f_cor(:,j+1)+f_cor(:,j))* &
 					(u(:,j+1)+u(:,j))* &
 					re/g*(dtheta(j))
 		enddo				
@@ -488,7 +488,7 @@
 				ipp+2*o_halo, & ! size of the data packet
 				MPI_REAL8, &
 				nbottom, & ! send to below (south)
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, MPI_COMM_WORLD,error)
 		
 		endif
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -519,13 +519,13 @@
 					if((i > ipstart) .and. (i <=ipstart+ipp) &
 						.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
 					
-						if ((theta(j-jpstart)*180._sp/PI) > 75._sp &
-							.and. (theta(j-jpstart)*180._sp/PI) < 80._sp) then
+						if ((theta(j-jpstart)*180._wp/PI) > 75._wp &
+							.and. (theta(j-jpstart)*180._wp/PI) < 80._wp) then
 						
 							height(i-ipstart,j-jpstart) = &
 								height(i-ipstart,j-jpstart) + &
-								r*1000.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
-									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_sp
+								r*1000.e0_wp*0.6e5_wp/height(i-ipstart,j-jpstart) ! *&
+									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_wp
 						endif
 					endif
 
@@ -544,13 +544,13 @@
 					if((i > ipstart) .and. (i <=ipstart+ipp) &
 						.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
 					
-						if ((theta(j-jpstart)*180._sp/PI) > (theta_jet-h_jet*3._sp) &
-						.and. (theta(j-jpstart)*180._sp/PI) <(theta_jet+h_jet*3._sp)) then
+						if ((theta(j-jpstart)*180._wp/PI) > (theta_jet-h_jet*3._wp) &
+						.and. (theta(j-jpstart)*180._wp/PI) <(theta_jet+h_jet*3._wp)) then
 						
 							height(i-ipstart,j-jpstart) = &
 								height(i-ipstart,j-jpstart) + &
-								r*1000.e0_sp*0.6e5_sp/height(i-ipstart,j-jpstart) ! *&
-									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_sp
+								r*1000.e0_wp*0.6e5_wp/height(i-ipstart,j-jpstart) ! *&
+									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_wp
 						endif
 					endif
 
@@ -631,7 +631,7 @@
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	subroutine check(status)
 	use netcdf
-	use nrtype
+	use numerics_type
 	integer(i4b), intent ( in) :: status
 
 	if(status /= nf90_noerr) then

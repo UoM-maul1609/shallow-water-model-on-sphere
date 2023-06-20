@@ -3,9 +3,16 @@
 	!>@brief
 	!>mpi routines for shallow water model
     module mpi_module
-    use nrtype
+    use numerics_type
     use mpi
+    implicit none
     
+#if VAR_TYPE==0
+		integer(i4b), parameter :: MPIREAL=MPI_REAL4
+#endif
+#if VAR_TYPE==1
+		integer(i4b), parameter :: MPIREAL=MPI_REAL8
+#endif
     private
     public :: mpi_define, block_ring, exchange_halos
     
@@ -43,7 +50,7 @@
 	subroutine exchange_halos(comm2d, id, ipp, jpp, o_halo, array)
 		implicit none
 		integer(i4b), intent(in) :: comm2d, id, ipp, jpp, o_halo
-		real(sp), intent(inout), &
+		real(wp), intent(inout), &
 			 dimension(1-o_halo:o_halo+ipp,1-o_halo:o_halo+jpp) :: array
 		
 		integer(i4b) :: error, nbrleft, nbrright, nbrbottom, nbrtop, tag1, &
@@ -61,10 +68,10 @@
 		if (nbrleft /= id) then
 			tag1=010
 			! send from left (specify destination):
-			call MPI_Issend(array(ipp+1-o_halo:ipp,1:jpp), jpp, MPI_REAL8, nbrright, &
+			call MPI_Issend(array(ipp+1-o_halo:ipp,1:jpp), jpp, MPIREAL, nbrright, &
 				tag1, MPI_COMM_WORLD, request,error)
 			! receive from left (specify source):
-			call MPI_Recv(array(1-o_halo:0,1:jpp), jpp, MPI_REAL8, nbrleft, &
+			call MPI_Recv(array(1-o_halo:0,1:jpp), jpp, MPIREAL, nbrleft, &
 				tag1, MPI_COMM_WORLD, status,error)
 			call MPI_Wait(request, status, error)
 		else
@@ -76,10 +83,10 @@
 		if (nbrright /= id) then
 			tag1=010
 			! send from right (specify destination):
-			call MPI_Issend(array(1:o_halo,1:jpp), jpp, MPI_REAL8, nbrleft, &
+			call MPI_Issend(array(1:o_halo,1:jpp), jpp, MPIREAL, nbrleft, &
 				tag1, MPI_COMM_WORLD, request,error)
 			! receive from right (specify source):
-			call MPI_Recv(array(ipp+1:ipp+o_halo,1:jpp), jpp, MPI_REAL8, nbrright, &
+			call MPI_Recv(array(ipp+1:ipp+o_halo,1:jpp), jpp, MPIREAL, nbrright, &
 				tag1, MPI_COMM_WORLD, status,error)
 			call MPI_Wait(request, status, error)
 		else
@@ -90,10 +97,10 @@
 		if ((nbrtop /= id)) then
 			tag1=110
 			! send from top (specify destination):
-			call MPI_Issend(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPI_REAL8, nbrtop, &
+			call MPI_Issend(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPIREAL, nbrtop, &
 				tag1, MPI_COMM_WORLD, request,error)
 			! receive from top (specify source):
-			call MPI_Recv(array(1:ipp,1-o_halo:0), ipp, MPI_REAL8, nbrbottom, &
+			call MPI_Recv(array(1:ipp,1-o_halo:0), ipp, MPIREAL, nbrbottom, &
 				tag1, MPI_COMM_WORLD, status,error)
 			call MPI_Wait(request, status, error)
 		else
@@ -103,10 +110,10 @@
 		if ((nbrbottom /= id)) then
 			tag1=110
 			! send from bottom (specify destination):
-			call MPI_Issend(array(1:ipp,1:o_halo), ipp, MPI_REAL8, nbrbottom, &
+			call MPI_Issend(array(1:ipp,1:o_halo), ipp, MPIREAL, nbrbottom, &
 				tag1, MPI_COMM_WORLD, request,error)
 			! receive from bottom (specify source):
-			call MPI_Recv(array(1:ipp,jpp+1:jpp+o_halo), ipp, MPI_REAL8, nbrtop, &
+			call MPI_Recv(array(1:ipp,jpp+1:jpp+o_halo), ipp, MPIREAL, nbrtop, &
 				tag1, MPI_COMM_WORLD, status,error)
 			call MPI_Wait(request, status, error)
 		else

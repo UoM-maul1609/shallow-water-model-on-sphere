@@ -3,7 +3,7 @@
 	!>@brief
 	!>drivers for the shallow water model
     module drivers
-    use nrtype
+    use numerics_type
     !use variables
     private
     public :: model_driver
@@ -70,7 +70,7 @@
 				subgrid_model, viscous_dissipation, dissipate_h,vis, cvis, &
 				vis_eq, lat_eq, &
 				dims,id, world_process, rank, ring_comm)
-		use nrtype
+		use numerics_type
 		use mpi_module
 		use advection
 
@@ -82,26 +82,26 @@
 		integer(i4b), intent(in) :: id, world_process, ring_comm, rank
 		integer(i4b), dimension(2), intent(in) :: coords, dims
 		character (len=*), intent(in) :: outputfile
-		real(sp), intent(in) :: f, re, g, rho, dt, output_interval
-		real(sp), dimension(1-o_halo:ipp+o_halo), intent(in) :: phi, phin, dphi, dphin
-		real(sp), dimension(1-o_halo:jpp+o_halo), intent(in) :: theta, thetan, u_nudge, &
+		real(wp), intent(in) :: f, re, g, rho, dt, output_interval
+		real(wp), dimension(1-o_halo:ipp+o_halo), intent(in) :: phi, phin, dphi, dphin
+		real(wp), dimension(1-o_halo:jpp+o_halo), intent(in) :: theta, thetan, u_nudge, &
 																dtheta, dthetan
-		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
+		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(in) :: f_cor, hs, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
     				recq, cq_s, cq, dp1, dq, recqdq
-		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
+		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(inout) :: h, u, v, height
-		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
+		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(in) :: dx, dy, x, y
-		real(sp), intent(in) :: vis, nudge_tau, cvis, lat_eq, vis_eq
+		real(wp), intent(in) :: vis, nudge_tau, cvis, lat_eq, vis_eq
 					
 		! locals:		
 		integer(i4b) :: n, cur=1, j, error, rank2
-		real(sp) :: time, time_last_output, output_time
-		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
+		real(wp) :: time, time_last_output, output_time
+		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
 				u_old, v_old, h_old
-		real(sp), dimension(1:ipp,1:jpp) :: delsq, vort, visco
+		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco
 		
 
 		time_last_output=-output_interval
@@ -116,11 +116,11 @@
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			! write netcdf variables                                                     !
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			time=real(n-1,sp)*dt
+			time=real(n-1,wp)*dt
 			if (time-time_last_output >= output_interval) then
 				if (id==world_process) &
 					print *,'output no ',cur,' at time (hrs) ', &
-						time/3600._sp,n,' steps of ',ntim
+						time/3600._wp,n,' steps of ',ntim
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				! calculate diagnostics for output: vorticity, etc                       !
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -168,21 +168,21 @@
 					! mid-point rule:
 					u(1:ipp,j)=u(1:ipp,j)+ &
 						(u_nudge(j)- &
-						(0.5_sp*(u(1:ipp,j)+u_old(1:ipp,j)))/real(1,sp) ) &
+						(0.5_wp*(u(1:ipp,j)+u_old(1:ipp,j)))/real(1,wp) ) &
 						/nudge_tau * dt
 ! 					v(1:ipp,j)=v(1:ipp,j)+&
-! 						(0._sp- &
-! 						sum(0.5_sp*(v(1:ipp,j)+v_old(1:ipp,j)))/real(ipp,sp) ) &
+! 						(0._wp- &
+! 						sum(0.5_wp*(v(1:ipp,j)+v_old(1:ipp,j)))/real(ipp,wp) ) &
 ! 						/nudge_tau *dt
 
 ! 					Derived by integrating du/dt=(u_nudge-u)/tau
 ! 					u(1:ipp,j)=u_nudge(j)- &
 ! 						(u_nudge(j)- &
-! 						(u(1:ipp,j))/real(1,sp) ) * &
+! 						(u(1:ipp,j))/real(1,wp) ) * &
 ! 						exp(-dt/nudge_tau )
-! 					v(1:ipp,j)=0._sp- &
-! 						(0._sp- &
-! 						(v(1:ipp,j))/real(1,sp) ) * &
+! 					v(1:ipp,j)=0._wp- &
+! 						(0._wp- &
+! 						(v(1:ipp,j))/real(1,wp) ) * &
 ! 						exp(-dt/nudge_tau )
 					
 				enddo
@@ -211,7 +211,7 @@
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				! dissipate u                                                            !
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				call dissipation(ipp,jpp,o_halo,dt,0.5_sp*(u_old+u), delsq,re,&
+				call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(u_old+u), delsq,re,&
 					theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 					recq, cq_s, dp1, dq)
 										
@@ -219,8 +219,8 @@
 				case (1)
 					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*vis			
 				case (2)
-					call smagorinsky(ipp,jpp,o_halo,cvis,0.5_sp*(u_old+u),&
-									0.5_sp*(v_old+v),visco,re,recq, dp1, dq)
+					call smagorinsky(ipp,jpp,o_halo,cvis,0.5_wp*(u_old+u),&
+									0.5_wp*(v_old+v),visco,re,recq, dp1, dq)
 					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*visco			
 				case default
 					print *,'error subgrid ',subgrid_model
@@ -236,7 +236,7 @@
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				! dissipate v                                                            !
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				call dissipation(ipp,jpp,o_halo,dt,0.5_sp*(v_old+v), delsq,re,&
+				call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(v_old+v), delsq,re,&
 					theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 					recq, cq_s, dp1, dq)
 								
@@ -252,11 +252,11 @@
 
 
 				do j=1,jpp
-					if((theta(j) >-lat_eq*pi/180._sp) .and. &
-						 (theta(j) < lat_eq*pi/180._sp)) then
+					if((theta(j) >-lat_eq*pi/180._wp) .and. &
+						 (theta(j) < lat_eq*pi/180._wp)) then
 
 						v(1:ipp,j)=v(1:ipp,j)+dt*delsq(1:ipp,j)*vis_eq* &
-							cos(theta(j)*90._sp/lat_eq)
+							cos(theta(j)*90._wp/lat_eq)
 					endif
 				enddo
 
@@ -273,7 +273,7 @@
 					call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
 					!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-					call dissipation(ipp,jpp,o_halo,dt,0.5_sp*(h_old+h), delsq,re,&
+					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(h_old+h), delsq,re,&
 						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 						recq, cq_s, dp1, dq)
 						
@@ -300,14 +300,14 @@
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			
 ! 			if(coords(2)==(dims(2)-1)) then
-! 				v(:,jpp+1:jpp+o_halo)=0._sp
+! 				v(:,jpp+1:jpp+o_halo)=0._wp
 ! 				do j=jpp+1,jpp+o_halo
 ! 					u(:,j)=u_nudge(j)
 ! 				enddo
 ! 				h(:,jpp+o_halo)=h(:,jpp)
 ! 			endif
 ! 			if(coords(2)==0) then
-! 				v(:,1-o_halo)=0._sp
+! 				v(:,1-o_halo)=0._wp
 ! 				do j=1-o_halo,0
 ! 					u(:,j)=u_nudge(j)
 ! 				enddo
@@ -363,18 +363,18 @@
     		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
     		recq, cq_s, cq, dp1, dq)
 
-		use nrtype
+		use numerics_type
 		implicit none
 		integer(i4b), intent(in) :: ip,jp,o_halo
-		real(sp), intent(in) :: dt, re
-		real(sp), dimension(1-o_halo:jp+o_halo), intent(in) :: &
+		real(wp), intent(in) :: dt, re
+		real(wp), dimension(1-o_halo:jp+o_halo), intent(in) :: &
 											theta,thetan, dtheta, dthetan
-		real(sp), dimension(1-o_halo:ip+o_halo), intent(in) :: &											
+		real(wp), dimension(1-o_halo:ip+o_halo), intent(in) :: &											
 											phi, phin, dphi, dphin
-		real(sp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
+		real(wp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
 																				u,v, &
 										recq, cq_s, cq, dp1, dq
-		real(sp), intent(inout), dimension(1:ip,1:jp) :: vort
+		real(wp), intent(inout), dimension(1:ip,1:jp) :: vort
 		! local variables:
 		integer(i4b) :: j, i
 			
@@ -382,7 +382,7 @@
 				
 		! calculate relative vorticity 
 		! (central difference ):
-		vort(1:ip,1:jp)  =-1._sp/(recq(1:ip,1:jp))* &
+		vort(1:ip,1:jp)  =-1._wp/(recq(1:ip,1:jp))* &
 			( (u(1:ip,2:jp+1)*cq(1:ip,2:jp+1)- &
 			   u(1:ip,0:jp-1)*cq(1:ip,0:jp-1))/dq(1:ip,1:jp) - &
 			  (v(2:ip+1,1:jp)-v(0:ip-1,1:jp))/dp1(1:ip,1:jp) ) 
@@ -435,13 +435,13 @@
 		logical, intent(inout) :: new_file
 		character (len=*), intent(in) :: outputfile
 		integer(i4b), intent(in) :: n, ip, ipp, ipstart, jp, jpp, jpstart, o_halo
-		real(sp), intent(in) :: time
-		real(sp), dimension(1-o_halo:ipp+o_halo), intent(in) :: phi
-		real(sp), dimension(1-o_halo:jpp+o_halo), intent(in) :: theta, u_nudge
+		real(wp), intent(in) :: time
+		real(wp), dimension(1-o_halo:ipp+o_halo), intent(in) :: phi
+		real(wp), dimension(1-o_halo:jpp+o_halo), intent(in) :: theta, u_nudge
 		
-		real(sp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
+		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(in) :: f_cor, height, h, u, v
-		real(sp), dimension(1:ipp,1:jpp), intent(in) :: vort
+		real(wp), dimension(1:ipp,1:jpp), intent(in) :: vort
 		
 		integer(i4b), intent(in) :: id ,world_process, rank, ring_comm
 	
@@ -726,7 +726,7 @@
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	subroutine check(status)
 		use netcdf
-		use nrtype
+		use numerics_type
 		integer(i4b), intent ( in) :: status
 
 		if(status /= nf90_noerr) then
