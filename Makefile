@@ -57,8 +57,8 @@ driver_code.$(OBJ) : driver_code.f90 advection.$(OBJ) mpi_module.$(OBJ) osnf_cod
 advection.$(OBJ) : advection.f90 osnf_code
 	$(FOR) advection.f90  -I$(OSNF_DIR) $(FFLAGS)advection.$(OBJ)
 main.$(OBJ)   : main.f90 variables.$(OBJ) mpi_module.$(OBJ) initialisation.$(OBJ) \
-				driver_code.$(OBJ) advection.$(OBJ)
-	$(FOR)  main.f90 -I ${NETCDFMOD}  $(FFLAGS)main.$(OBJ) 
+				driver_code.$(OBJ) advection.$(OBJ) osnf_code
+	$(FOR)  main.f90 -I ${NETCDFMOD} -I$(OSNF_DIR) $(FFLAGS)main.$(OBJ) 
 
 osnf_code:
 	$(MAKE) -C $(OSNF_DIR)

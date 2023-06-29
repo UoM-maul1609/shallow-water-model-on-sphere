@@ -52,6 +52,7 @@
         use mpi_module
         use initialisation
         use drivers
+        use numerics_type, only : wp
         
         implicit none
         character (len=200) :: nmlfile = ' '
@@ -105,8 +106,8 @@
         ! Set-up the Cartesian topology										   !
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! note the min is so that there is not more than 1 proc per grid point
-		mp1%dx=min( floor( sqrt(real(mp1%rank,sp)) ), nm1%ip)
-		mp1%dy=min( floor( real(mp1%rank,sp) / real(mp1%dx,sp) ), nm1%jp )
+		mp1%dx=min( floor( sqrt(real(mp1%rank,wp)) ), nm1%ip)
+		mp1%dy=min( floor( real(mp1%rank,wp) / real(mp1%dx,wp) ), nm1%jp )
 
 		if(mp1%id == world_process) then
 			print *,'Cartesian topology: ',mp1%dx, mp1%dy			
