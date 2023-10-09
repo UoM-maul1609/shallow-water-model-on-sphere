@@ -8,6 +8,7 @@ import numpy as np
 from netCDF4 import Dataset as NetCDFFile
 import scipy as scy
 import scipy.interpolate as sci
+import scipy.signal as scs
 
 def fourier_wave_number(fileName,u_jet):
     """
@@ -46,7 +47,7 @@ def fourier_wave_number(fileName,u_jet):
 
 
 
-            locs1=scy.signal.find_peaks(np.concatenate([X,X[0:3]]),prominence=1);
+            locs1=scs.find_peaks(np.concatenate([X,X[0:3]]),prominence=1);
             locs=locs1[0]
             if (len(locs)>0):
                 if (locs[0] == locs[-1]-c):
