@@ -7,6 +7,7 @@ matplotlib.use('Agg')
 import numpy as np
 from netCDF4 import Dataset as NetCDFFile
 import scipy as scy
+import scipy.interpolate as sci
 
 def fourier_wave_number(fileName,u_jet):
     """
@@ -80,7 +81,7 @@ if __name__=='__main__':
     cmap_lev=64;
     map=plt.get_cmap(lut=cmap_lev,name='ocean')
     u1=np.linspace(u_jets[0],u_jets[-1],cmap_lev);
-    int1=scy.interpolate.interp1d(u1,np.mgrid[1:cmap_lev+1],kind='nearest');
+    int1=sci.interp1d(u1,np.mgrid[1:cmap_lev+1],kind='nearest');
 
 
     mean_rot=np.zeros((n_files,9));

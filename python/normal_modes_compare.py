@@ -6,6 +6,7 @@ matplotlib.use('Agg')
 
 import numpy as np
 import scipy as scy
+import scipy.interpolate as sci
 import matplotlib.pyplot as plt
 
 def normal_modes_compare(u_jets,flag):
@@ -16,7 +17,7 @@ def normal_modes_compare(u_jets,flag):
     cmap_lev=64;
     map=plt.get_cmap(lut=cmap_lev,name='jet')
     u1=np.linspace(u_jets[0],u_jets[-1],cmap_lev);
-    int1=scy.interpolate.interp1d(u1,np.mgrid[1:cmap_lev+1],kind='nearest');
+    int1=sci.interp1d(u1,np.mgrid[1:cmap_lev+1],kind='nearest');
 
     
     L=1000e3;       # measure distance in units of 1000 km
