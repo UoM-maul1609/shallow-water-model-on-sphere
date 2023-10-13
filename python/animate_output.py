@@ -20,7 +20,9 @@ rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 rc('text', usetex=True)
 
 username=getpass.getuser()
-username=username + '../'
+
+if not os.path.exists('/tmp/' + username):
+    os.mkdir('/tmp/' + username)
 
 #nc=NetCDFFile('/tmp//output.nc')
 nc=NetCDFFile('/tmp/' + username + '/output.nc')

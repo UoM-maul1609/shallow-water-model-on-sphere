@@ -10,6 +10,11 @@ import scipy as scy
 import scipy.interpolate as sci
 import scipy.signal as scs
 
+username=getpass.getuser()
+
+if not os.path.exists('/tmp/' + username):
+    os.mkdir('/tmp/' + username)
+
 def fourier_wave_number(fileName,u_jet):
     """
         uses findpeaks and fourier analysis to track the current wave number and
@@ -72,7 +77,7 @@ def fourier_wave_number(fileName,u_jet):
 
 if __name__=='__main__':
 
-    fileName=['/tmp/output.nc']
+    fileName=['/tmp/' + username +'/output.nc']
     n_files=len(fileName); 
     
     u_jets=[50.]
@@ -106,4 +111,4 @@ if __name__=='__main__':
     h=plt.colorbar()
     h.set_label('Jet speed (m/s)')    
 
-    plt.savefig('/tmp/fourier_wave_number.png' ,format='png', dpi=300) 
+    plt.savefig('/tmp/' + username + '/fourier_wave_number.png' ,format='png', dpi=300) 

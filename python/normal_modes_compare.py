@@ -9,6 +9,12 @@ import scipy as scy
 import scipy.interpolate as sci
 import matplotlib.pyplot as plt
 
+username=getpass.getuser()
+
+if not os.path.exists('/tmp/' + username):
+    os.mkdir('/tmp/' + username)
+
+
 def normal_modes_compare(u_jets,flag):
     """
         normal mode analysis of a gaussian jet - see Mak, Atmospheric Dynamics, page 229
@@ -166,5 +172,5 @@ if __name__=='__main__':
      
     normal_modes_compare([50.],1)
 
-    plt.savefig('/tmp/fourier_wave_number.png' ,format='png', dpi=300) 
+    plt.savefig('/tmp/' + username +'/fourier_wave_number.png' ,format='png', dpi=300) 
     
