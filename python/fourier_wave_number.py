@@ -77,7 +77,7 @@ def fourier_wave_number(fileName,u_jet):
 
 if __name__=='__main__':
 
-    fileName=['/tmp/' + username +'/output.nc']
+    fileName=['/tmp/' + username + '/output.nc']
     n_files=len(fileName); 
     
     u_jets=[50.]
