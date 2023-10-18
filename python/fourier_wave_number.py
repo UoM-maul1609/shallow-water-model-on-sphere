@@ -75,6 +75,41 @@ def fourier_wave_number(fileName,u_jet):
 
     return (phase,rotation_rate,wave_number)
 
+
+def do_analysis01(fileNames,u_jets):
+
+    n_files=len(fileNames); 
+    
+
+    cmap_lev=64;
+    map=plt.get_cmap(lut=cmap_lev,name='ocean')
+    u1=np.linspace(u_jets[0],u_jets[-1],cmap_lev);
+    int1=sci.interp1d(u1,np.mgrid[1:cmap_lev+1],kind='nearest');
+
+
+    mean_rot=np.zeros((n_files,9));
+    std_rot=np.zeros((n_files,9));
+    for j in range(n_files):
+        (phase,rotation_rate,wave_number)=fourier_wave_number([fileNames[j]],u_jets)
+        for i in range(0,9):
+            ind1,=np.where(np.diff(wave_number[j,:])==0)
+            ind,=np.where(wave_number[j,ind1]==(i+1));
+            ind = ind1[ind]
+            if(len(ind)>2):
+                mean_rot[j,i]=np.mean(rotation_rate[j,ind[1:-2]]);
+                std_rot[j,i]=np.std(rotation_rate[j,ind[1:-2]]);
+            else:
+                mean_rot[j,i]=np.nan
+                std_rot[j,i]=np.nan
+                
+        h=plt.scatter(np.mgrid[1:10],mean_rot[j,:],s=40,c=u_jets[j]*np.ones(9));
+        
+    plt.xlabel('wave number (per full rotation)');
+    plt.ylabel('mean rotation rate (rotations per year)');
+    h=plt.colorbar()
+    h.set_label('Jet speed (m/s)')    
+   
+
 if __name__=='__main__':
 
     fileName=['/tmp/' + username + '/output.nc']
