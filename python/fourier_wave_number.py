@@ -4,6 +4,8 @@ import matplotlib
 import sys
 matplotlib.use('Agg')
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 from netCDF4 import Dataset as NetCDFFile
 import scipy as scy
@@ -15,7 +17,7 @@ username=getpass.getuser()
 if not os.path.exists('/tmp/' + username):
     os.mkdir('/tmp/' + username)
 
-def fourier_wave_number(fileName,u_jet):
+def fourier_wave_number(fileName):
     """
         uses findpeaks and fourier analysis to track the current wave number and
         the rotation speed (i.e. using phase information from the fft).
@@ -60,7 +62,7 @@ def fourier_wave_number(fileName,u_jet):
 
             ind=len(locs);
         
-            phs=np.unwrap(np.angle(Y))*180./np.pi;
+            phs=np.unwrap(np.angle(Y))*180./np.pi; # phase angle in degrees
 
             print('wave number is : ' + str(f[ind]) + '; phase: ' + str(phs[ind]));
             phase[j,i]=phs[ind];
@@ -69,6 +71,10 @@ def fourier_wave_number(fileName,u_jet):
 
         nc.close();
         phaseold[j,:]=phase[j,:];
+        
+        # phase is the phase of the wave through it's cycle, but 
+        # we want the movement of the wave train around the planet, 
+        # so divide by number of waves. 
         phase[j,:]=np.unwrap(phaseold[j,:]*np.pi/180.)*180./np.pi/(wave_number[j,:]);
         rotation_rate[j,:]=-np.diff(phase[j,:],n=1,axis=0) /  \
             dt_sec*86400.*365.25/360; # full rotations per year
@@ -90,20 +96,21 @@ def do_analysis01(fileNames,u_jets):
     mean_rot=np.zeros((n_files,9));
     std_rot=np.zeros((n_files,9));
     for j in range(n_files):
-        (phase,rotation_rate,wave_number)=fourier_wave_number([fileNames[j]],u_jets)
+        (phase,rotation_rate,wave_number)=fourier_wave_number([fileNames[j]])
         for i in range(0,9):
-            ind1,=np.where(np.diff(wave_number[j,:])==0)
-            ind,=np.where(wave_number[j,ind1]==(i+1));
+            print(j)
+            ind1,=np.where(np.diff(wave_number[0,:])==0)
+            ind,=np.where(wave_number[0,ind1]==(i+1));
             ind = ind1[ind]
             if(len(ind)>2):
-                mean_rot[j,i]=np.mean(rotation_rate[j,ind[1:-2]]);
-                std_rot[j,i]=np.std(rotation_rate[j,ind[1:-2]]);
+                mean_rot[j,i]=np.mean(rotation_rate[0,ind[1:-2]]);
+                std_rot[j,i]=np.std(rotation_rate[0,ind[1:-2]]);
             else:
                 mean_rot[j,i]=np.nan
                 std_rot[j,i]=np.nan
                 
         h=plt.scatter(np.mgrid[1:10],mean_rot[j,:],s=40,c=u_jets[j]*np.ones(9));
-        
+        plt.clim((u_jets[0],u_jets[-1]))
     plt.xlabel('wave number (per full rotation)');
     plt.ylabel('mean rotation rate (rotations per year)');
     h=plt.colorbar()
@@ -115,9 +122,10 @@ if __name__=='__main__':
     fileName=['/tmp/' + username + '/output.nc']
     n_files=len(fileName); 
     
-    u_jets=[50.]
+    u_jets=[50., 70., 100.]
+    thisOne=0
 
-    (phase,rotation_rate,wave_number)=fourier_wave_number(fileName,u_jets)
+    (phase,rotation_rate,wave_number)=fourier_wave_number(fileName)
 
     cmap_lev=64;
     map=plt.get_cmap(lut=cmap_lev,name='ocean')
@@ -140,10 +148,12 @@ if __name__=='__main__':
                 mean_rot[j,i]=np.nan
                 std_rot[j,i]=np.nan
                 
-        h=plt.scatter(np.mgrid[1:10],mean_rot[j,:],s=40,c=u_jets[j]*np.ones(9));
+    h=plt.scatter(np.mgrid[1:10],mean_rot[j,:],s=40,c=u_jets[thisOne]*np.ones(9));
     plt.xlabel('wave number (per full rotation)');
     plt.ylabel('mean rotation rate (rotations per year)');
-    h=plt.colorbar()
-    h.set_label('Jet speed (m/s)')    
+    plt.clim((np.min(u_jets),np.max(u_jets)))
+    if(thisOne==0):
+        h=plt.colorbar()
+        h.set_label('Jet speed (m/s)')    
 
     plt.savefig('/tmp/' + username + '/fourier_wave_number.png' ,format='png', dpi=300) 

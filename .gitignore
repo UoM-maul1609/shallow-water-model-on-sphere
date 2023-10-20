@@ -12,3 +12,5 @@ doxygen
 matlab-dev
 fortran_testing
 *.png
+__pycache__
+

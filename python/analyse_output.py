@@ -3,8 +3,11 @@ import getpass
 import matplotlib
 import sys
 matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 import numpy as np
+import fourier_wave_number
+import normal_modes_compare
 
 username=getpass.getuser()
 
@@ -15,23 +18,22 @@ if not os.path.exists('/tmp/' + username):
 """ do the fourier analysis
 """
 
-u_jet=[5., 10., 20., 30., 40., 50., 60., 70., 80.,\
- 90., 100., 125., 150., 175., 200., 250., 300., 350.,];
+u_jet=[50., 70., 100.];
 
-c_vis=[0.,0.1,0.2,1.0]
+c_vis=[0.2]
 
 plt.ion()
 plt.figure()
 for j in range(len(c_vis)):
-    fileNames=['/tmp/' + username + '/output' + str(i) + '_' + str(j) + '.nc' \
+    fileNames=['/tmp/' + username + '/output_' + str(i) + '_' + str(j) + '.nc' \
         for i in range(len(u_jet))]
     
-    plt.subplot(1,len(c_vis),j)
+    plt.subplot(1,len(c_vis),j+1)
     
-    fourier_wave_number.do_analysis01(fileNames,u_jet[i]);
-
+    fourier_wave_number.do_analysis01(fileNames,u_jet);
+    
     # same for each value of c_cvis
-    normal_modes_compare(u_jet[i],1);
+    normal_modes_compare.normal_modes_compare(u_jet,1);
     plt.title('$C_{vis}$=' + str(c_vis[j]))
     
 plt.savefig('/tmp/' + username + '/full_analysis.png')

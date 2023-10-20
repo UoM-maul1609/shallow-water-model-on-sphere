@@ -21,7 +21,7 @@ def normal_modes_compare(u_jets,flag):
     """
 
     cmap_lev=64;
-    map=plt.get_cmap(lut=cmap_lev,name='jet')
+    map=plt.get_cmap(lut=cmap_lev,name='viridis')
     u1=np.linspace(u_jets[0],u_jets[-1],cmap_lev);
     int1=sci.interp1d(u1,np.mgrid[1:cmap_lev+1],kind='nearest');
 
@@ -42,7 +42,7 @@ def normal_modes_compare(u_jets,flag):
     lat_low=65;     # lowest
     re=5.4155760e7; # radius of saturn in this region (due to squashed spheriod)
     #re=5.8232e7;
-    h_jet=1.2;      # standard deviation of jet
+    h_jet=1.;      # standard deviation of jet
     lat_jet=77;     # latitude of the jet
     n_ks=36;        # calculate the growth factor for this many k-values
 
@@ -125,17 +125,20 @@ def normal_modes_compare(u_jets,flag):
             if sigmas_max[n-1,2]<1.e-9:
                 sigmas_max_i[n-1,2]=np.nan
 
-        
         if flag==1:
-            h=plt.plot(np.mgrid[1:n_ks+1], \
+            h=[]
+            # sigma / k is wave speed in m/s
+            # k is 2*pi/lambda and lambda is x_len/n
+            # so this is rotations per year
+            h.append(plt.plot(np.mgrid[1:n_ks+1], \
                 (-sigmas_max_i[:,0]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)) \
-                *86400.*365.25/x_len);
-            h=plt.plot(np.mgrid[1:n_ks+1], \
+                *86400.*365.25/x_len));
+            h.append(plt.plot(np.mgrid[1:n_ks+1], \
                 (-sigmas_max_i[:,1]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)) \
-                *86400.*365.25/x_len,'--');
-            h=plt.plot(np.mgrid[1:n_ks+1], \
+                *86400.*365.25/x_len,'--'));
+            h.append(plt.plot(np.mgrid[1:n_ks+1], \
                 (-sigmas_max_i[:,2]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)) \
-                *86400.*365.25/x_len,':');
+                *86400.*365.25/x_len,':'));
             plt.ylabel('speed of wave (rotations per year)')
             plt.xlabel('number of peaks')
         elif flag==2:
@@ -155,12 +158,13 @@ def normal_modes_compare(u_jets,flag):
             h=[h, h2];
 
         if ( len(u_jets) > 1):
-            row=int1(u_jets[i])
+            row=int(int1(u_jets[i]))
         else:
             row=1;
 
         for k in range(len(h)):
-            h[k].set_color(map(row));
+            h[k][0].set_color(map(row));
+
             
         if flag==2:
             plt.legend(['Largest','2nd largest','3rd largest','sum'])
@@ -169,8 +173,9 @@ def normal_modes_compare(u_jets,flag):
 if __name__=='__main__':      
     plt.ion()
     plt.figure() 
-     
-    normal_modes_compare([50.],1)
+    u_jets=[50.,70,100.]
+#     u_jets=[50.]
+    normal_modes_compare(u_jets,1)
 
     plt.savefig('/tmp/' + username +'/fourier_wave_number.png' ,format='png', dpi=300) 
     
