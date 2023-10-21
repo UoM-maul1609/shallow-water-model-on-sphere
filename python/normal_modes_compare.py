@@ -125,37 +125,43 @@ def normal_modes_compare(u_jets,flag):
             if sigmas_max[n-1,2]<1.e-9:
                 sigmas_max_i[n-1,2]=np.nan
 
+        h=[]
         if flag==1:
-            h=[]
             # sigma / k is wave speed in m/s
             # k is 2*pi/lambda and lambda is x_len/n
             # so this is rotations per year
             h.append(plt.plot(np.mgrid[1:n_ks+1], \
                 (-sigmas_max_i[:,0]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)) \
-                *86400.*365.25/x_len));
+                *86400.*365.25/x_len,'-x'));
             h.append(plt.plot(np.mgrid[1:n_ks+1], \
                 (-sigmas_max_i[:,1]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)) \
-                *86400.*365.25/x_len,'--'));
+                *86400.*365.25/x_len,'--x'));
             h.append(plt.plot(np.mgrid[1:n_ks+1], \
                 (-sigmas_max_i[:,2]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)) \
-                *86400.*365.25/x_len,':'));
+                *86400.*365.25/x_len,':x'));
             plt.ylabel('speed of wave (rotations per year)')
             plt.xlabel('number of peaks')
         elif flag==2:
-            h=plt.plot(np.mgrid[1:n_ks+1],sigmas_max[:,0]);
-            h2=plt.plot(np.mgrid[1:n_ks+1],sigmas_max[:,1],'--');
-            h3=plt.plot(np.mgrid[1:n_ks+1],sigmas_max[:,2],':');
-            h4=plt.plot(np.mgrid[1:n_ks+1],np.sum(sigmas_max[:,:],axis=1),lw=3);
-            h=[h[0], h2[0], h3[0] ,h4[0]];
+            # largest growth rate
+            h.append(plt.plot(np.mgrid[1:n_ks+1],sigmas_max[:,0]));
+            # second largest
+            h.append(plt.plot(np.mgrid[1:n_ks+1],sigmas_max[:,1],'--'));
+            # third largest
+            h.append(plt.plot(np.mgrid[1:n_ks+1],sigmas_max[:,2],':'));
+            # sum of all
+            h.append(plt.plot(np.mgrid[1:n_ks+1],np.sum(sigmas_max[:,:],axis=1),lw=3));
+            
+            plt.grid('on')
             plt.xlabel('number of peaks')
             plt.ylabel('Growth rate')
             plt.legend(['Largest','2nd largest','3rd largest','sum'])
         elif flag==3:
-            h=plt.plot(np.mgrid[1:n_ks+1], \
-                (-sigmas_max_i[:,0]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)));
-            h2=plt.plot(np.mgrid[1:n_ks+1], \
-                (-sigmas_max_i[:,1]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)),'--');
-            h=[h, h2];
+            h.append(plt.plot(np.mgrid[1:n_ks+1], \
+                (-sigmas_max_i[:,0]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len))));
+            h.append(plt.plot(np.mgrid[1:n_ks+1], \
+                (-sigmas_max_i[:,1]/(2.*np.pi*np.mgrid[1:n_ks+1]/x_len)),'--'));
+            plt.ylabel('speed of wave (rotations per year)')
+            plt.xlabel('number of peaks')
 
         if ( len(u_jets) > 1):
             row=int(int1(u_jets[i]))
@@ -168,14 +174,29 @@ def normal_modes_compare(u_jets,flag):
             
         if flag==2:
             plt.legend(['Largest','2nd largest','3rd largest','sum'])
-
+            
     
 if __name__=='__main__':      
     plt.ion()
-    plt.figure() 
+    fig=plt.figure() 
     u_jets=[50.,70,100.]
-#     u_jets=[50.]
-    normal_modes_compare(u_jets,1)
+#     u_jets=[100.]
 
+    if len(sys.argv) > 1:
+        flag = int(sys.argv[1])
+    else:
+        flag = 1
+
+    # 1, plot speed vs wave number
+    # 2, plot growth rate vs wave number
+    # 3, same as 1, but only first two
+    normal_modes_compare(u_jets,flag)
+    
+    if (flag==2) or (flag==3):
+        sm=plt.cm.ScalarMappable(cmap='viridis',\
+            norm=plt.Normalize(vmin=np.min(u_jets), vmax=np.max(u_jets)))
+        h=fig.colorbar(sm,ax=fig.gca())
+        h.set_label('$U_{jet}$ (m s$^{-1}$)')
+    
     plt.savefig('/tmp/' + username +'/fourier_wave_number.png' ,format='png', dpi=300) 
     

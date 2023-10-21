@@ -1,6 +1,9 @@
 #!/bin/bash
 
-ARRAY1=(5. 10. 20. 30. 40. 50. 60. 70. 80. 90. 100. 125. 150. 175. 200. 250. 300. 350.) # peak jet
+# ARRAY1=(5. 10. 20. 30. 40. 50. 60. 70. 80. 90. 100. 125. 150. 175. 200. 250. 300. 350.) # peak jet
+# ARRAY2=(0. 0.1 0.2 1.) # cvis in Smagorinsky model
+
+ARRAY1=(50. 100. 150. ) # peak jet
 ARRAY2=(0. 0.1 0.2 1.) # cvis in Smagorinsky model
 
 
