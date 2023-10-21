@@ -122,8 +122,8 @@ if __name__=='__main__':
     fileName=['/tmp/' + username + '/output.nc']
     n_files=len(fileName); 
     
-    u_jets=[50., 70., 100.]
-    thisOne=0
+    u_jets=[50., 100., 150.]
+    thisOne=2
 
     (phase,rotation_rate,wave_number)=fourier_wave_number(fileName)
 

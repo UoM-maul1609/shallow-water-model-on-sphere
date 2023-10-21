@@ -179,7 +179,7 @@ def normal_modes_compare(u_jets,flag):
 if __name__=='__main__':      
     plt.ion()
     fig=plt.figure() 
-    u_jets=[50.,70,100.]
+    u_jets=[50.,100,150.]
 #     u_jets=[100.]
 
     if len(sys.argv) > 1:
