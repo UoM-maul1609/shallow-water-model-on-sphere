@@ -13,4 +13,5 @@ matlab-dev
 fortran_testing
 *.png
 __pycache__
-
+output
+tests
