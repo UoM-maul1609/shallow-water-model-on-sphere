@@ -29,8 +29,8 @@ RUN chown -R myuser:myuser /app
 # Switch to the non-root user
 USER myuser
 
-#RUN cd /app/src && ./main.exe namelist.in 12
-RUN cd /app/src && mpiexec -n 8 ./main.exe namelist.in
+#RUN cd /app/src && ./main.exe ../config/namelist.in 12
+RUN cd /app/src && mpiexec -n 8 ./main.exe ../config/namelist.in
 
 CMD [ "sleep", "infinity" ]
 

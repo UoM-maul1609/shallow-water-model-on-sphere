@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sed -e "s|output.nc|${USER}/output.nc|" namelist.in > namelist.tmp
+sed -e "s|output.nc|${USER}/output.nc|" ../config/namelist.in > namelist.tmp
 
 mkdir /tmp/${USER}
 

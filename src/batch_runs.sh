@@ -16,7 +16,7 @@ for (( i=0;i<$ELEMENTS1;i++)); do
 	for (( j=0;j<$ELEMENTS2;j++)); do
 			# Runs with the hm process switched on:
 	 		echo ${ARRAY1[${i}]} ${ARRAY2[${j}]} 
-            sed -e "s|output.nc|${USER}/output_${i}_${j}.nc|" namelist.in > namelist.tmp
+            sed -e "s|output.nc|${USER}/output_${i}_${j}.nc|" ../config/namelist.in > namelist.tmp
 			sed -e "s/u_jet=50./u_jet=${ARRAY1[${i}]}/" namelist.tmp > /tmp/namelist.tmp2
  			sed -e "s/cvis=0.2/cvis=${ARRAY2[${j}]}/" /tmp/namelist.tmp2 > namelist.run
  			

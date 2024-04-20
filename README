@@ -17,8 +17,8 @@ Doxygen pages:
 	*you can then view the html pages by opening the file at "doxygen/html/index.html"
 Running code:
 	*run the code by typing the following:
-	* single processor: ./main.exe namelist.in
-	* mpi job: mpiexec -n 32 ./main.exe namelist.in
+	* single processor: ./main.exe ../config/namelist.in
+	* mpi job: mpiexec -n 32 ./main.exe ../config/namelist.in
 Contributing development:
 	* at the moment the code is under private repo with no development branches. Contact 
 		the code owner to contribute ideas. 
