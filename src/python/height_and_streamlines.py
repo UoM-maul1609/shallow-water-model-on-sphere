@@ -1,15 +1,25 @@
+"""
+Module Name: height_and_stREamlines.py
+
+Description:
+This module contains code to analyse the height and
+streamlines and produce a frame.png image output at
+the final timestep of the data.
+"""
+
 import os
 import getpass
 import matplotlib
-import sys
-matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
-from matplotlib import rc
 import numpy as np
-from netCDF4 import Dataset as NetCDFFile
 
 from scipy.interpolate import griddata
+# pylint: disable=E0611
+# (pylint can't find Dataset in the netCDF4 package for some reason)
+from netCDF4 import Dataset as NetCDFFile
+
+matplotlib.use('Agg')
 
 username=getpass.getuser()
 
@@ -24,9 +34,9 @@ u=nc.variables['u'][:]
 v=nc.variables['v'][:]
 time=nc.variables['time'][:]
 
-Re=5.4155760e7
+RE=5.4155760e7
 (lo,la)=np.meshgrid(lons,np.pi/2.-lats)
-arc=la*Re
+arc=la*RE
 x=arc*np.cos(lo)
 y=arc*np.sin(lo)
 
@@ -38,13 +48,14 @@ yy=np.linspace(-4.5e7,4.5e7,100)
 
 (xx1,yy1)=np.meshgrid(xx,yy)
 
-#uu=griddata((x[0::10,0::10],y[0::10,0::10]),u[-1,0::10,0::10]-np.mean(u[-1,0::10,0::10],axis=0),(xx,yy))
-#vv=griddata((x[0::10,0::10],y[0::10,0::10]),v[-1,0::10,0::10],(xx,yy))
+# uu=griddata((x[0::10,0::10],y[0::10,0::10]),u[-1,0::10,0::10]-np.mean(u[-1,0::10,0::10],axis=0),(xx,yy)) pylint: disable=C0301
+# vv=griddata((x[0::10,0::10],y[0::10,0::10]),v[-1,0::10,0::10],(xx,yy))
 
 u11=(u[-1,:,:]-np.mean(u[-1,:,:],axis=0))
 v11=(v[-1,:,:])
 
-# pol2cart velocity https://math.stackexchange.com/questions/2444965/relationship-between-cartesian-velocity-and-polar-velocity
+# pol2cart velocity
+# https://math.stackexchange.com/questions/2444965/relationship-between-cartesian-velocity-and-polar-velocity pylint: disable=C0301
 u111=-v11*np.cos(lo)-u11*np.sin(lo)
 v111=-v11*np.sin(lo)+u11*np.cos(lo)
 
@@ -62,9 +73,9 @@ plt.ylim((-2e7,2e7))
 cbar=plt.colorbar(hmap)
 cbar.set_label('h,m')
 
-plt.title('Height at t=' + '{0:.2f}'.format(time[-1]/(86400)) +' days')
+plt.title(f"Height at t={time[-1]/(86400):.2f} days")
 
 if not os.path.exists('../../output/frames'):
     os.mkdir('../../output/frames')
 
-plt.savefig('../../output/frames/frame.png' ,format='png', dpi=300) 
+plt.savefig('../../output/frames/frame.png' ,format='png', dpi=300)

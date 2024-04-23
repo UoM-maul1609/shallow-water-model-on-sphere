@@ -1,3 +1,5 @@
+[![Pylint](https://github.com/petrafisher-code/ShallowWaterModelCode/actions/workflows/pylint.yml/badge.svg)](https://github.com/petrafisher-code/ShallowWaterModelCode/actions/workflows/pylint.yml)
+
 ## 1. Getting started
 Clone the repository
 ```bash
