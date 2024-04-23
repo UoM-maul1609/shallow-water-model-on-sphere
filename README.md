@@ -1,4 +1,5 @@
 [![Pylint](https://github.com/petrafisher-code/ShallowWaterModelCode/actions/workflows/pylint.yml/badge.svg)](https://github.com/petrafisher-code/ShallowWaterModelCode/actions/workflows/pylint.yml)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/78931da744204063946b10ed5931d4aa)](https://app.codacy.com/gh/petrafisher-code/ShallowWaterModelCode/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 
 ## 1. Getting started
 Clone the repository
