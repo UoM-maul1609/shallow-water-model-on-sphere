@@ -65,7 +65,7 @@ for it1 in range(3, len(time) + 1, 4):
                 vort = nc.variables["vort"][:]
                 nc.close()
                 # set up orthographic map projection
-                x, y, basemap = create_map_func(lons, lats)
+                x, y, basemap = create_map_func(lons, lats, 1200000)
                 # contour data over the map.
                 # cs = basemap.contour(x,y,wave+mean,15,linewidths=1.5)
                 cs1 = basemap.pcolor(x, y, vort[it, :, :], cmap="jet")

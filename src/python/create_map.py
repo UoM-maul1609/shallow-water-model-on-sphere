@@ -11,7 +11,7 @@ map coordinate matrices.
 import numpy as np
 from mpl_toolkits.basemap import Basemap
 
-def create_map_func(lons, lats):
+def create_map_func(lons, lats, satellite_height):
     """
     Draw an orthographic map projection with perspective of satellite 
     looking down at 50N, 100W.
@@ -29,9 +29,9 @@ def create_map_func(lons, lats):
                And also the Basemap object.
     """
     basemap = Basemap(
-        satellite_height=3000000,
+        satellite_height=satellite_height,
         projection="nsper",
-        lat_0=90,
+        lat_0=82,
         lon_0=-100,
         resolution="l",
     )
