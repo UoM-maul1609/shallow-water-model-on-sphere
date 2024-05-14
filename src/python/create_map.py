@@ -11,7 +11,7 @@ map coordinate matrices.
 import numpy as np
 from mpl_toolkits.basemap import Basemap
 
-def create_map_func(lons, lats, satellite_height):
+def create_map_func(lons, lats, satellite_height=3000000, satellite_angle=90):
     """
     Draw an orthographic map projection with perspective of satellite 
     looking down at 50N, 100W.
@@ -19,8 +19,10 @@ def create_map_func(lons, lats, satellite_height):
     Parameters:
         lons (numpy.ndarray): 1D array of longitudes.
         lats (numpy.ndarray): 1D array of latitudes.
-        wave (numpy.ndarray): 2D array of wave data.
-        mean (numpy.ndarray): 2D array of mean data.
+        satellite_height (float): The height we want the map to be
+                                  displayed from, from Saturn's core.
+        satellite_angle (float): Angle from which to view the Saturn
+                                 map.
 
     Returns:
         tuple: A tuple containing the meshgrid x and y coordinates.
@@ -31,7 +33,7 @@ def create_map_func(lons, lats, satellite_height):
     basemap = Basemap(
         satellite_height=satellite_height,
         projection="nsper",
-        lat_0=82,
+        lat_0=satellite_angle,
         lon_0=-100,
         resolution="l",
     )
