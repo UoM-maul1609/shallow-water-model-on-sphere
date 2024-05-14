@@ -41,6 +41,10 @@ def create_map_func(lons, lats):
     basemap.drawmeridians(np.arange(0, 360, 30))
     basemap.drawparallels(np.arange(-90, 90, 30))
 
+    # Make sure that map boundary is not clipped by the axes
+    circle = basemap.drawmapboundary(linewidth=0.75, color='k')
+    circle.set_clip_on(False)
+
     # Create meshgrid
     (lo, la) = np.meshgrid(lons, lats)
     x, y = basemap(lo * 180.0 / np.pi, la * 180.0 / np.pi)

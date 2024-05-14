@@ -12,6 +12,7 @@ import getpass
 import matplotlib
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 
 from scipy.interpolate import griddata
@@ -40,7 +41,6 @@ arc=la*RE
 x=arc*np.cos(lo)
 y=arc*np.sin(lo)
 
-#plt.ion()
 hmap=plt.pcolor(x,y,h[-1,:,:])
 plt.axis('square')
 xx=np.linspace(-4.5e7,4.5e7,100)
@@ -63,17 +63,28 @@ u111=u111[0::5,0::5].flatten()
 v111=v111[0::5,0::5].flatten()
 
 uu=griddata((x[0::5,0::5].flatten(),y[0::5,0::5].flatten()),u111,(xx1,yy1))
-
 vv=griddata((x[0::5,0::5].flatten(),y[0::5,0::5].flatten()),v111,(xx1,yy1))
 
 plt.streamplot(xx,yy,uu,vv,4)
 plt.xlim((-2e7,2e7))
 plt.ylim((-2e7,2e7))
 
+# Adding the labels
+max_h_magnitude = np.max(np.abs(h))
+scale = 10 ** np.floor(np.log10(max_h_magnitude))
+scaled_label = f'h (10$^{int(np.log10(scale))}$ m)'
 cbar=plt.colorbar(hmap)
-cbar.set_label('h,m')
+cbar.set_label(scaled_label)
 
-plt.title(f"Height at t={time[-1]/(86400):.2f} days")
+# Formatter so the colourbar has the correct notation
+formatter = FuncFormatter(lambda x, _: f'{x/scale:.2f}')
+cbar.ax.yaxis.set_major_formatter(formatter)
+
+# Changing the notation of the x and y axis
+plt.ticklabel_format(style='sci', scilimits=(0,0))
+plt.gca().ticklabel_format(useMathText=True)
+
+plt.title(f"Height and Velocity Streamlines at t={time[-1]/(86400):.2f} days")
 
 if not os.path.exists('../../output/frames'):
     os.mkdir('../../output/frames')
