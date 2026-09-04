@@ -42,7 +42,8 @@
             			initially_geostrophic, &
             			viscous_dissipation, &
             			dissipate_h, nudge, restart
-            integer(i4b) :: initial_winds, ip, jp, subgrid_model
+            integer(i4b) :: initial_winds, ip, jp, subgrid_model, &
+						coriolis_scheme=0_i4b
             real(wp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &

@@ -68,7 +68,7 @@
 				ipstart, jpstart, coords, &
 				new_file,outputfile, output_interval, nudge, nudge_tau, &
 				subgrid_model, viscous_dissipation, dissipate_h,vis, cvis, &
-				vis_eq, lat_eq, &
+				vis_eq, lat_eq, coriolis_scheme, &
 				dims,id, world_process, rank, ring_comm)
 		use numerics_type
 		use mpi_module
@@ -78,7 +78,7 @@
 		logical, intent(inout) :: new_file
 		logical, intent(in) :: nudge, viscous_dissipation, dissipate_h
 		integer(i4b), intent(in) :: ip,ipp, jp,jpp, ntim, o_halo, ipstart, jpstart, &
-									subgrid_model
+									subgrid_model, coriolis_scheme
 		integer(i4b), intent(in) :: id, world_process, ring_comm, rank
 		integer(i4b), dimension(2), intent(in) :: coords, dims
 		character (len=*), intent(in) :: outputfile
@@ -151,7 +151,7 @@
 			v_old=v
 			call lax_wendroff_ll(ipp,jpp,o_halo,dt,g,u,v,h,hs,re,&
 	    		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, f_cor, &
-    			recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s)	    		
+    			recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, coriolis_scheme)	    		
 ! 			call lax_wendroff_sphere(ipp,jpp,o_halo,dt,dx,dy,g,u,v,h,hs,re,theta,f_cor)
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

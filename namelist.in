@@ -5,6 +5,7 @@
 	nm1%add_random_height_noise=.true.,
 	nm1%initially_geostrophic=.true.,
 	nm1%subgrid_model=2, ! 1 = constant viscosity, 2=smagorinsky
+	nm1%coriolis_scheme=0, ! 0=legacy/original (default), 1=Crank-Nicolson
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.false.,
 	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
@@ -30,8 +31,8 @@
 	nm1%rotation_period_hours=10.55,
 	nm1%scale_height=60e3, ! scale-height of saturn's atmosphere
 	nm1%ip=400,
-	nm1%jp=120,
+	nm1%jp=240,
 	nm1%slat=-90.,
 	nm1%nlat=90.,
-	nm1%slat_thresh=65.,
+	nm1%slat_thresh=45.,
 	nm1%nlat_thresh=86.5/

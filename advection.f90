@@ -194,11 +194,11 @@
 	!>\f$ \frac{\partial \psi}{\partial t} + \frac{\partial u \psi}{\partial x} = 0 \f$
     subroutine lax_wendroff_ll(ip,jp,o_halo,dt,g,u,v,h,hs,re,&
     		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, f_cor, &
-    		recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s)
+    		recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, coriolis_scheme)
 
 		use numerics_type
 		implicit none
-		integer(i4b), intent(in) :: ip,jp,o_halo
+		integer(i4b), intent(in) :: ip,jp,o_halo, coriolis_scheme
 		real(wp), intent(in) :: dt, g, re
 		real(wp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
 																		hs, f_cor, &
@@ -215,7 +215,8 @@
 		real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: & 
 					dy1, v1, h1, vh, uh, vh1, Ux, Uy, Vx, Vy, Vy2
 		real(wp), dimension(1:ip,1:jp) :: &
-									    uh_new, vh_new, h_new
+									    uh_new, vh_new, h_new, &
+									    cor_alpha, cor_denom, cor_rhs_u, cor_rhs_v
 										
 		real(wp), dimension(0:ip,1:jp) :: h_mid_xt, uh_mid_xt, Ux_mid_xt, Vx_mid_xt
 		real(wp), dimension(0:ip,1:jp) :: vh_mid_xt
@@ -301,15 +302,51 @@
 		  (Vy_mid_yt2(1:ip,1:jp)-Vy_mid_yt2(1:ip,0:jp-1))
 
 
-		! add on Coriolis and contribution of orography to pressure gradient:
-		uh_new=uh_new  +dt*.5_wp*(f_cor(1:ip,1:jp)*v(1:ip,1:jp) - &
-			g*(hs(2:ip+1,1:jp)-hs(0:ip-1,1:jp))/(recqdp(1:ip,1:jp)+recqdp(0:ip-1,1:jp)))* &
-			(h(1:ip,1:jp)+h_new)
+		! Coriolis/source corrector.  Keep the original scheme as the default
+		! for backwards compatibility; scheme 1 uses a Crank-Nicolson
+		! corrector for the conservative momenta.
+		select case (coriolis_scheme)
+		case (0)
+			! Legacy/original source update.  This is intentionally kept in
+			! the same form as the original model.
+			uh_new=uh_new  +dt*.5_wp*(f_cor(1:ip,1:jp)*v(1:ip,1:jp) - &
+				g*(hs(2:ip+1,1:jp)-hs(0:ip-1,1:jp))/(recqdp(1:ip,1:jp)+recqdp(0:ip-1,1:jp)))* &
+				(h(1:ip,1:jp)+h_new)
 
-		vh_new=vh_new  -dt*.5_wp*(f_cor(1:ip,1:jp)*u(1:ip,1:jp) + &
-			g*(hs(1:ip,2:jp+1)-hs(1:ip,0:jp-1))/(redq(1:ip,1:jp)+redq(1:ip,0:jp-1)))* &
-			(h(1:ip,1:jp)+h_new)
+			vh_new=vh_new  -dt*.5_wp*(f_cor(1:ip,1:jp)*u(1:ip,1:jp) + &
+				g*(hs(1:ip,2:jp+1)-hs(1:ip,0:jp-1))/(redq(1:ip,1:jp)+redq(1:ip,0:jp-1)))* &
+				(h(1:ip,1:jp)+h_new)
 
+		case (1)
+			! Add the orographic pressure-gradient source first.
+			uh_new = uh_new - dt*0.5_wp*g* &
+				(hs(2:ip+1,1:jp)-hs(0:ip-1,1:jp)) / &
+				(recqdp(1:ip,1:jp)+recqdp(0:ip-1,1:jp)) * &
+				(h(1:ip,1:jp)+h_new)
+
+			vh_new = vh_new - dt*0.5_wp*g* &
+				(hs(1:ip,2:jp+1)-hs(1:ip,0:jp-1)) / &
+				(redq(1:ip,1:jp)+redq(1:ip,0:jp-1)) * &
+				(h(1:ip,1:jp)+h_new)
+
+			! Crank-Nicolson Coriolis corrector for the conservative momenta:
+			!   uh^{n+1} = uh* + alpha (vh^n + vh^{n+1})
+			!   vh^{n+1} = vh* - alpha (uh^n + uh^{n+1})
+			! with alpha = f*dt/2.
+			cor_alpha = 0.5_wp*dt*f_cor(1:ip,1:jp)
+			cor_denom = 1._wp + cor_alpha**2
+
+			cor_rhs_u = uh_new + cor_alpha*vh(1:ip,1:jp)
+			cor_rhs_v = vh_new - cor_alpha*uh(1:ip,1:jp)
+
+			uh_new = (cor_rhs_u + cor_alpha*cor_rhs_v) / cor_denom
+			vh_new = (cor_rhs_v - cor_alpha*cor_rhs_u) / cor_denom
+
+		case default
+			write(*,*) 'ERROR: unknown coriolis_scheme = ', coriolis_scheme
+			write(*,*) '       valid values are 0 (legacy) and 1 (Crank-Nicolson)'
+			stop 1
+		end select
 
 
 		! re-calculate u and v.
@@ -379,7 +416,7 @@
 		delsq(1:ip,1:jp)  = delsq(1:ip,1:jp) + &
 			1._wp/(recq(1:ip,1:jp)**2._wp)* &
 			( (f(2:ip+1,1:jp)-f(1:ip,1:jp))/dp1(1:ip,1:jp) - &
-			  (f(1:ip,1:jp)-f(0:ip-1,1:jp))/dp1(1:ip,0:jp-1) ) / &
+			  (f(1:ip,1:jp)-f(0:ip-1,1:jp))/dp1(0:ip-1,1:jp) ) / &
 			  dp1(1:ip,1:jp)
 
 	end subroutine dissipation
