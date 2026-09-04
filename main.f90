@@ -141,7 +141,7 @@
  				grid1%u_nudge,grid1%o_halo, &
 				grid1%ipstart, grid1%jpstart, grid1%coords, &
 				nm1%inputfile, nm1%add_random_height_noise, &
-				nm1%initially_geostrophic, nm1%initial_winds, &
+				nm1%initially_geostrophic, nm1%momentum_metric_terms, nm1%initial_winds, &
 				nm1%u_jet, nm1%theta_jet, nm1%h_jet, &
 				nm1%ip, nm1%jp, &
 				nm1%wind_factor, nm1%wind_shift, nm1%wind_reduce, nm1%runtime, &
@@ -182,7 +182,7 @@
 				nm1%nudge,nm1%nudge_timescale, &
 				nm1%subgrid_model, nm1%viscous_dissipation, &
 				nm1%dissipate_h,nm1%vis,nm1%cvis, &
-				nm1%vis_eq,nm1%lat_eq, nm1%coriolis_scheme, &
+				nm1%vis_eq,nm1%lat_eq, nm1%coriolis_scheme, nm1%momentum_metric_terms, &
 				mp1%dims,mp1%id, world_process, mp1%rank, mp1%ring_comm)
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

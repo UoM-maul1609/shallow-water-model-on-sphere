@@ -59,7 +59,8 @@
 	!>@param[inout] coords - coordinates of cartesian topology
 	!>@param[in] inputfile - netcdf file of saturn winds
 	!>@param[in] add_random_height_noise - add noise to get going
-	!>@param[in] initially_geostrophic - set to geostrophic balance
+	!>@param[in] initially_geostrophic - diagnose balanced winds from height after perturbation
+	!>@param[in] momentum_metric_terms - 0 legacy/geostrophic; 1 spherical curvature/gradient-wind
 	!>@param[in] initial_winds - flag: saturn, or jet?
 	!>@param[in] ideal jet parameters: u_jet, theta_jet, h_jet
 	!>@param[in] ip - global ip (all pes)
@@ -91,7 +92,7 @@
 				recqdq, &
 				u_nudge, o_halo, ipstart, jpstart, coords, &
 				inputfile, add_random_height_noise, &
-				initially_geostrophic, initial_winds, &
+				initially_geostrophic, momentum_metric_terms, initial_winds, &
 				u_jet, theta_jet, h_jet, &
 				ip, jp, &
 				wind_factor, wind_shift, wind_reduce, runtime, &
@@ -122,7 +123,7 @@
 		! namelist variables used to set the grid
 		character (len=*), intent(in) :: inputfile
 		logical, intent(in) :: add_random_height_noise, initially_geostrophic
-		integer(i4b), intent(in) :: initial_winds, ip, jp
+		integer(i4b), intent(in) :: initial_winds, ip, jp, momentum_metric_terms
 		real(wp), intent(in) :: wind_factor, wind_shift, wind_reduce, runtime, &
 							dt_nm, grav, rho_nm, re_nm, &
 							rotation_period_hours, scale_height, &
@@ -137,7 +138,8 @@
 		integer(i4b) :: iloc, error, AllocateStatus, ncid, varid1,varid2, dimid, nlats, &
 						i, j
 		real(wp), dimension(:), allocatable :: latitude, wind
-		real(wp) :: var, dummy, delta_omega, slat_thresh2, nlat_thresh2
+		real(wp) :: var, dummy, delta_omega, slat_thresh2, nlat_thresh2, &
+                    pgrad_y, pgrad_x, kcurv, disc, root1, root2, u_geo, f_eff
 		! for random number:
 		real(wp) :: r
 		real(wp), dimension(10,10) :: rs
@@ -475,12 +477,32 @@
 		endif
 
 		
-		do j=jpp,0,-1
-			height(:,j)=height(:,j+1)+ &	
-					0.25_wp*(f_cor(:,j+1)+f_cor(:,j))* &
-					(u(:,j+1)+u(:,j))* &
-					re/g*(dtheta(j))
-		enddo				
+        select case (momentum_metric_terms)
+        case (0)
+            ! Legacy geostrophic balance used by the original model.
+            do j=jpp,0,-1
+                height(:,j)=height(:,j+1)+ &
+                        0.25_wp*(f_cor(:,j+1)+f_cor(:,j))* &
+                        (u(:,j+1)+u(:,j))* &
+                        re/g*(dtheta(j))
+            enddo
+        case (1)
+            ! Gradient-wind balance for a zonal flow on a sphere:
+            !   g/re dh/dtheta = -f*u - u^2*tan(theta)/re.
+            ! Integrate southward from the prescribed northern height,
+            ! using midpoint values between adjacent latitude rows.
+            do j=jpp,0,-1
+                height(:,j)=height(:,j+1)+ &
+                        ( 0.25_wp*(f_cor(:,j+1)+f_cor(:,j))* &
+                          (u(:,j+1)+u(:,j))*re + &
+                          0.25_wp*(u(:,j+1)+u(:,j))**2*tan(thetan(j)) ) * &
+                        dtheta(j)/g
+            enddo
+        case default
+            write(*,*) 'ERROR: unknown momentum_metric_terms = ', momentum_metric_terms
+            write(*,*) '       valid values are 0 (legacy/off) and 1 (spherical/on)'
+            stop 1
+        end select
 		! if the y coordinate is not most southerly
 		if ( (coords(2)+1) /= 1 ) then
 			tag1=2010
@@ -580,14 +602,69 @@
 		! if halos in height are set correctly
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!		
 		if(initially_geostrophic) then
-			do j=1,jpp
-				u(:,j)=-g*(height(:,j+1)-height(:,j-1)) / &
-						(re*(dtheta(j)+dtheta(j-1))*f_cor(:,j))
-			enddo
-			do i=1,ipp
-				v(i,:)=g*(height(i+1,:)-height(i-1,:)) / &
-						(re*(dphi(i)+dphi(i-1))*cos(theta(:))*f_cor(i,:))
-			enddo		
+            select case (momentum_metric_terms)
+            case (0)
+                ! Legacy geostrophic diagnosis after the random height
+                ! perturbation has been added.
+                do j=1,jpp
+                    u(:,j)=-g*(height(:,j+1)-height(:,j-1)) / &
+                            (re*(dtheta(j)+dtheta(j-1))*f_cor(:,j))
+                enddo
+                do i=1,ipp
+                    v(i,:)=g*(height(i+1,:)-height(i-1,:)) / &
+                            (re*(dphi(i)+dphi(i-1))*cos(theta(:))*f_cor(i,:))
+                enddo
+
+            case (1)
+                ! Local gradient-wind diagnosis after adding the height
+                ! perturbation.  The meridional pressure gradient gives
+                !   k*u^2 + f*u + P_y = 0,  k=tan(theta)/re.
+                ! Choose the root continuous with the geostrophic solution.
+                do j=1,jpp
+                    kcurv=tan(theta(j))/re
+                    do i=1-o_halo,ipp+o_halo
+                        pgrad_y=g*(height(i,j+1)-height(i,j-1)) / &
+                                (re*(dtheta(j)+dtheta(j-1)))
+                        u_geo=-pgrad_y/f_cor(i,j)
+
+                        if (abs(kcurv) < 100._wp*tiny(1._wp)) then
+                            u(i,j)=u_geo
+                        else
+                            disc=f_cor(i,j)**2-4._wp*kcurv*pgrad_y
+                            if (disc < 0._wp) then
+                                write(*,*) 'ERROR: no real gradient-wind solution'
+                                write(*,*) ' i,j,theta(deg),disc = ', &
+                                    i,j,theta(j)*180._wp/pi,disc
+                                stop 1
+                            endif
+                            root1=(-f_cor(i,j)+sqrt(disc))/(2._wp*kcurv)
+                            root2=(-f_cor(i,j)-sqrt(disc))/(2._wp*kcurv)
+                            if (abs(root1-u_geo) <= abs(root2-u_geo)) then
+                                u(i,j)=root1
+                            else
+                                u(i,j)=root2
+                            endif
+                        endif
+                    enddo
+                enddo
+
+                ! The zonal pressure-gradient balance is modified by the
+                ! same curvature frequency: (f + u*tan(theta)/re)*v = P_x.
+                do j=1,jpp
+                    do i=1,ipp
+                        pgrad_x=g*(height(i+1,j)-height(i-1,j)) / &
+                                (re*(dphi(i)+dphi(i-1))*cos(theta(j)))
+                        f_eff=f_cor(i,j)+u(i,j)*tan(theta(j))/re
+                        if (abs(f_eff) <= tiny(1._wp)) then
+                            write(*,*) 'ERROR: zero effective Coriolis in gradient-wind initialisation'
+                            write(*,*) ' i,j,theta(deg),f_eff = ', &
+                                i,j,theta(j)*180._wp/pi,f_eff
+                            stop 1
+                        endif
+                        v(i,j)=pgrad_x/f_eff
+                    enddo
+                enddo
+            end select
 		endif	
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!		
 

@@ -190,15 +190,16 @@
 	!>@param[in] redq - for efficiency
 	!>@param[in] cq - for efficiency
 	!>@param[in] cq_s - for efficiency
+	!>@param[in] momentum_metric_terms - 0 legacy/off; 1 spherical momentum curvature terms
 	!>solves the 1-d advection equation:
 	!>\f$ \frac{\partial \psi}{\partial t} + \frac{\partial u \psi}{\partial x} = 0 \f$
     subroutine lax_wendroff_ll(ip,jp,o_halo,dt,g,u,v,h,hs,re,&
     		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, f_cor, &
-    		recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, coriolis_scheme)
+    		recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, coriolis_scheme, momentum_metric_terms)
 
 		use numerics_type
 		implicit none
-		integer(i4b), intent(in) :: ip,jp,o_halo, coriolis_scheme
+		integer(i4b), intent(in) :: ip,jp,o_halo, coriolis_scheme, momentum_metric_terms
 		real(wp), intent(in) :: dt, g, re
 		real(wp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
 																		hs, f_cor, &
@@ -213,7 +214,8 @@
 																				
 		! local variables:
 		real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: & 
-					dy1, v1, h1, vh, uh, vh1, Ux, Uy, Vx, Vy, Vy2
+					dy1, v1, h1, vh, uh, vh1, Ux, Uy, Vx, Vy, Vy2, &
+                    metric_u, metric_v
 		real(wp), dimension(1:ip,1:jp) :: &
 									    uh_new, vh_new, h_new, &
 									    cor_alpha, cor_denom, cor_rhs_u, cor_rhs_v
@@ -231,6 +233,25 @@
 		uh=u *h
 		vh=v*h
 		vh1=v1*h
+
+        ! Spherical curvature/metric source terms for the conservative
+        ! eastward/northward momenta. Keep them disabled by default for
+        ! exact backwards compatibility with the original model.
+        metric_u = 0._wp
+        metric_v = 0._wp
+        select case (momentum_metric_terms)
+        case (0)
+            ! Legacy behaviour: no momentum curvature terms.
+        case (1)
+            do j=1-o_halo,jp+o_halo
+                metric_u(:,j) =  uh(:,j)*v(:,j)*tan(theta(j))/re
+                metric_v(:,j) = -uh(:,j)*u(:,j)*tan(theta(j))/re
+            enddo
+        case default
+            write(*,*) 'ERROR: unknown momentum_metric_terms = ', momentum_metric_terms
+            write(*,*) '       valid values are 0 (legacy/off) and 1 (spherical/on)'
+            stop 1
+        end select
 		
 		! continuity equation (calculate mid-point values at 0.5*dt):
 		h_mid_xt = 0.5_wp*(h(1:ip+1,1:jp)+h(0:ip,1:jp)) &
@@ -271,6 +292,20 @@
 		  -(0.5_wp*dt/(redq_s(1:ip,0:jp)))*(Vy2(1:ip,1:jp+1)-Vy2(1:ip,0:jp)) &
 		  -0.125_wp*dt*(f_cor(1:ip,1:jp+1)+f_cor(1:ip,0:jp))*(uh(1:ip,1:jp+1)+uh(1:ip,0:jp))
 
+        ! Add half-step spherical momentum metric sources at the faces.
+        ! The arithmetic mean of the adjacent cell-centred source is used,
+        ! multiplied by dt/2 for the Lax-Wendroff predictor.
+        if (momentum_metric_terms == 1) then
+            uh_mid_xt(0:ip,1:jp) = uh_mid_xt(0:ip,1:jp) + 0.25_wp*dt* &
+                (metric_u(1:ip+1,1:jp)+metric_u(0:ip,1:jp))
+            uh_mid_yt(1:ip,0:jp) = uh_mid_yt(1:ip,0:jp) + 0.25_wp*dt* &
+                (metric_u(1:ip,1:jp+1)+metric_u(1:ip,0:jp))
+            vh_mid_xt(0:ip,1:jp) = vh_mid_xt(0:ip,1:jp) + 0.25_wp*dt* &
+                (metric_v(1:ip+1,1:jp)+metric_v(0:ip,1:jp))
+            vh_mid_yt(1:ip,0:jp) = vh_mid_yt(1:ip,0:jp) + 0.25_wp*dt* &
+                (metric_v(1:ip,1:jp+1)+metric_v(1:ip,0:jp))
+        endif
+
 ! 		calculate mid-point value of cos (theta)
 ! 		c_mid_yt=cos(0.5.*(THETA(:,2:end)+THETA(:,1:end-1)));
 ! 
@@ -301,6 +336,19 @@
 		  - (dt/(redq(1:ip,0:jp-1) ))* &
 		  (Vy_mid_yt2(1:ip,1:jp)-Vy_mid_yt2(1:ip,0:jp-1))
 
+
+        ! Full-step spherical momentum metric source.  This mirrors the
+        ! original source treatment: old-time velocity with mean layer depth
+        ! 0.5*(h^n+h^{n+1}).  With coriolis_scheme=1 this increment is part of
+        ! the non-Coriolis RHS subsequently coupled to the CN Coriolis solve.
+        if (momentum_metric_terms == 1) then
+            do j=1,jp
+                uh_new(:,j) = uh_new(:,j) + dt*0.5_wp* &
+                    (h(1:ip,j)+h_new(:,j))*u(1:ip,j)*v(1:ip,j)*tan(theta(j))/re
+                vh_new(:,j) = vh_new(:,j) - dt*0.5_wp* &
+                    (h(1:ip,j)+h_new(:,j))*u(1:ip,j)*u(1:ip,j)*tan(theta(j))/re
+            enddo
+        endif
 
 		! Coriolis/source corrector.  Keep the original scheme as the default
 		! for backwards compatibility; scheme 1 uses a Crank-Nicolson
