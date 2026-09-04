@@ -148,6 +148,7 @@
         real(wp), dimension(:,:), allocatable :: noise_raw, noise_tmp, noise_corr
 		real(wp) :: var, dummy, delta_omega, slat_thresh2, nlat_thresh2, &
                     pgrad_y, pgrad_x, pgrad_y_base, kcurv, balance_freq, f_eff, &
+                    lat_model, lat_sample, &
                     noise_mean, noise_rms, noise_sum, noise_sumsq, noise_weight, &
                     sigma_i, sigma_j, dx_noise, dy_noise, wgt, lat_global, &
                     band_south, band_north
@@ -397,21 +398,37 @@
 			! saturn winds:                                                              !
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			case (1) 
-			! interpolate winds to u_nudge
+			! Saturn mean-wind profile.  The three wind controls act on the
+			! observed/reference profile itself, before the rotation-frame correction:
+			!
+			!   U_new(phi) = wind_factor * U_ref(phi - wind_shift) - wind_reduce
+			!
+			! wind_shift is in degrees: positive shifts profile features northward,
+			! negative shifts them southward.  wind_reduce is a literal subtraction
+			! in m/s (so sufficiently weak eastward winds can become westward).
 			delta_omega=2._wp*PI/(3600._wp)*(1._wp/10.656_wp-1._wp/rotation_period_hours)
 			do i=1-o_halo,jpp+o_halo
-				iloc=find_pos(latitude(1:nlats),asin(sin(theta(i)))*180._wp/PI)
+				lat_model=asin(sin(theta(i)))*180._wp/PI
+				lat_sample=lat_model-wind_shift
+
+				iloc=find_pos(latitude(1:nlats),lat_sample)
 				iloc=min(nlats-1,iloc)
 				iloc=max(1,iloc)
-				! linear interp theta
 
+				! Linear interpolation of the reference wind at the shifted latitude.
+				! Preserve the legacy endpoint clamping outside the supplied profile.
 				call poly_int(latitude(iloc:iloc+1), wind(iloc:iloc+1), &
-					min(max( asin(sin(theta(i)))*180._wp/PI, &
-					latitude(nlats)),latitude(1)), var,dummy)
+					min(max(lat_sample,latitude(nlats)),latitude(1)), var,dummy)
 				
 				if((theta(i)*180._wp/pi>90._wp) .or. &
 					(theta(i)*180._wp/pi<-90._wp) ) var=-var
 
+				! Apply requested Saturn-wind transformations in profile space.
+				var=wind_factor*var
+				var=var-wind_reduce
+
+				! Convert from the reference System III period used by the wind data
+				! to the model's chosen rotation period.  Do not scale/reduce this term.
 				var=var+delta_omega*re*cos(theta(i))
 			
 				u_nudge(i)=var
