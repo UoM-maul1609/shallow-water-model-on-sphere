@@ -4,26 +4,27 @@
 	nm1%outputfile = '/tmp/output.nc',
 	nm1%add_random_height_noise=.true.,
 	nm1%height_noise_scheme=1, ! 0=legacy grid-cell noise (default), 1=correlated physical-scale noise
-	nm1%height_noise_amplitude=100., ! RMS metres; used only for height_noise_scheme=1
-	nm1%height_noise_corr_length=5.e5, ! Gaussian sigma in metres; used only for scheme=1
+	nm1%height_noise_amplitude=200., ! RMS metres; used only for height_noise_scheme=1
+	nm1%height_noise_corr_length=5.e5, ! horizontal Gaussian sigma in metres; scheme=1
+	nm1%height_noise_lat_sigma=2.0, ! latitude-envelope sigma in degrees; scheme=1 (1 jet width for current analytic jet)
 	nm1%initially_geostrophic=.true.,
 	nm1%subgrid_model=2, ! 1 = constant viscosity, 2=smagorinsky
     nm1%smagorinsky_scheme=1, ! 0=legacy Smagorinsky (default), 1=spherical conservative SGS stress
 	nm1%coriolis_scheme=1, ! 0=legacy/original (default), 1=Crank-Nicolson
 	nm1%momentum_metric_terms=1, ! 0=legacy/off (default), 1=spherical curvature + gradient-wind init
 	nm1%lat_boundary_scheme=2, ! 0=legacy frozen ghosts, 1=free-slip wall, 2=radiative/open
-	nm1%sponge_south_width=0., ! degrees inward from the actual southern model latitude; 0 disables
-	nm1%sponge_south_timescale=0., ! seconds at boundary; 0 disables southern sponge
-	nm1%sponge_north_width=0., ! degrees inward from the actual northern model latitude; 0 disables
-	nm1%sponge_north_timescale=0., ! seconds at boundary; 0 disables northern sponge
+	nm1%sponge_south_width=5., ! degrees inward from the actual southern model latitude; 0 disables
+	nm1%sponge_south_timescale=43200., ! seconds at boundary; 0 disables southern sponge
+	nm1%sponge_north_width=2.5, ! degrees inward from the actual northern model latitude; 0 disables
+	nm1%sponge_north_timescale=43200., ! seconds at boundary; 0 disables northern sponge
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.false.,
 	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
-	nm1%u_jet=50.,  ! speed of jet
+	nm1%u_jet=55.,  ! speed of jet
 	nm1%theta_jet=73., ! latitude of jet
-	nm1%h_jet=1.15, ! standard deviation of jet (width)
+	nm1%h_jet=1., ! standard deviation of jet (width)
 	nm1%nudge=.true.,
-	nm1%nudge_scheme=1, ! 0=legacy/default, 1=nudge global zonal-mean u only
+	nm1%nudge_scheme=0, ! 0=legacy/default, 1=nudge global zonal-mean u only
 	nm1%nudge_timescale=6.e5, ! default 6.e5 seconds (about 7 days) (1.728e6=20 days)
 	nm1%restart=.false.,
 	nm1%wind_factor=1.0,

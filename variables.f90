@@ -56,6 +56,7 @@
             			u_jet, theta_jet, h_jet, cvis, vis_eq, lat_eq, &
                         height_noise_amplitude=100._wp, &
                         height_noise_corr_length=5.e5_wp, &
+                        height_noise_lat_sigma=1.15_wp, &
                         sponge_south_width=0._wp, &
                         sponge_north_width=0._wp, &
                         sponge_south_timescale=0._wp, &

@@ -143,7 +143,7 @@
 				grid1%ipstart, grid1%jpstart, grid1%coords, &
 				nm1%inputfile, nm1%add_random_height_noise, &
                 nm1%height_noise_scheme, nm1%height_noise_amplitude, &
-                nm1%height_noise_corr_length, &
+                nm1%height_noise_corr_length, nm1%height_noise_lat_sigma, &
 				nm1%initially_geostrophic, nm1%momentum_metric_terms, nm1%initial_winds, &
 				nm1%u_jet, nm1%theta_jet, nm1%h_jet, &
 				nm1%ip, nm1%jp, &

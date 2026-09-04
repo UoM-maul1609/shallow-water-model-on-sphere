@@ -61,7 +61,8 @@
 	!>@param[in] add_random_height_noise - add noise to get going
 	!>@param[in] height_noise_scheme - 0 legacy grid-cell noise; 1 correlated physical-scale noise
 	!>@param[in] height_noise_amplitude - RMS height perturbation in metres for scheme 1
-	!>@param[in] height_noise_corr_length - Gaussian correlation sigma in metres for scheme 1
+	!>@param[in] height_noise_corr_length - Gaussian horizontal correlation sigma in metres for scheme 1
+	!>@param[in] height_noise_lat_sigma - Gaussian latitude-envelope sigma in degrees for scheme 1
 	!>@param[in] initially_geostrophic - diagnose balanced winds from height after perturbation
 	!>@param[in] momentum_metric_terms - 0 legacy/geostrophic; 1 spherical curvature/gradient-wind
 	!>@param[in] initial_winds - flag: saturn, or jet?
@@ -95,7 +96,7 @@
 				recqdq, &
 				u_nudge, o_halo, ipstart, jpstart, coords, &
 				inputfile, add_random_height_noise, &
-                height_noise_scheme, height_noise_amplitude, height_noise_corr_length, &
+                height_noise_scheme, height_noise_amplitude, height_noise_corr_length, height_noise_lat_sigma, &
 				initially_geostrophic, momentum_metric_terms, initial_winds, &
 				u_jet, theta_jet, h_jet, &
 				ip, jp, &
@@ -131,7 +132,7 @@
                                   height_noise_scheme
 		real(wp), intent(in) :: wind_factor, wind_shift, wind_reduce, runtime, &
 							dt_nm, grav, rho_nm, re_nm, &
-                            height_noise_amplitude, height_noise_corr_length, &
+                            height_noise_amplitude, height_noise_corr_length, height_noise_lat_sigma, &
 							rotation_period_hours, scale_height, &
 							slat_thresh, nlat_thresh, &
 							u_jet, theta_jet, h_jet
@@ -151,7 +152,7 @@
                     lat_model, lat_sample, &
                     noise_mean, noise_rms, noise_sum, noise_sumsq, noise_weight, &
                     sigma_i, sigma_j, dx_noise, dy_noise, wgt, lat_global, &
-                    band_south, band_north
+                    band_south, band_north, noise_lat_centre, noise_envelope
 		! for random number:
 		real(wp) :: r
 		real(wp), dimension(10,10) :: rs
@@ -584,17 +585,26 @@
                     stop 1
                 endif
 
+                if (height_noise_lat_sigma <= 0._wp) then
+                    write(*,*) 'ERROR: height_noise_lat_sigma must be > 0 for correlated noise'
+                    stop 1
+                endif
+
+                ! The correlated field is normalised over +/- 3 sigma around the
+                ! jet, but the perturbation itself is multiplied by a smooth
+                ! Gaussian latitude envelope.  This avoids the sharp top-hat
+                ! edges used previously and concentrates the seed on the jet.
                 select case (initial_winds)
                 case (1)
-                    band_south=75._wp
-                    band_north=80._wp
+                    noise_lat_centre=77.5_wp
                 case (2)
-                    band_south=theta_jet-3._wp*h_jet
-                    band_north=theta_jet+3._wp*h_jet
+                    noise_lat_centre=theta_jet
                 case default
                     print *,'error initial_winds',initial_winds
                     stop
                 end select
+                band_south=noise_lat_centre-3._wp*height_noise_lat_sigma
+                band_north=noise_lat_centre+3._wp*height_noise_lat_sigma
 
                 allocate(noise_raw(1:ip,1:jp), noise_tmp(1:ip,1:jp), &
                          noise_corr(1:ip,1:jp), STAT=AllocateStatus)
@@ -677,18 +687,18 @@
 
                 do j=1,jp
                     lat_global=slat+(nlat-slat)*real(j-1,wp)/real(jp-1,wp)
-                    if (lat_global > band_south .and. lat_global < band_north) then
-                        if (j > jpstart .and. j <= jpstart+jpp) then
-                            do i=1,ip
-                                if (i > ipstart .and. i <= ipstart+ipp) then
-                                    if (height_noise_amplitude > 0._wp) then
-                                        height(i-ipstart,j-jpstart)=height(i-ipstart,j-jpstart) + &
-                                            height_noise_amplitude* &
-                                            (noise_corr(i,j)-noise_mean)/noise_rms
-                                    endif
+                    noise_envelope=exp(-0.5_wp*((lat_global-noise_lat_centre)/ &
+                                           height_noise_lat_sigma)**2)
+                    if (j > jpstart .and. j <= jpstart+jpp) then
+                        do i=1,ip
+                            if (i > ipstart .and. i <= ipstart+ipp) then
+                                if (height_noise_amplitude > 0._wp) then
+                                    height(i-ipstart,j-jpstart)=height(i-ipstart,j-jpstart) + &
+                                        height_noise_amplitude*noise_envelope* &
+                                        (noise_corr(i,j)-noise_mean)/noise_rms
                                 endif
-                            enddo
-                        endif
+                            endif
+                        enddo
                     endif
                 enddo
 
