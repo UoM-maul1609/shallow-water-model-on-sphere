@@ -154,9 +154,7 @@
             u_sponge_ref=u(1:ipp,1:jpp)
             v_sponge_ref=v(1:ipp,1:jpp)
 
-            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
-            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
-            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+            call exchange_state_halos(ring_comm, id, ipp, jpp, o_halo, h, u, v)
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, hs)
 
             if (lat_boundary_scheme == 1) then
@@ -438,9 +436,7 @@
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			! halo exchanges                                                             !
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
-			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
-			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+			call exchange_state_halos(ring_comm, id, ipp, jpp, o_halo, h, u, v)
             if (lat_boundary_scheme == 1) then
                 call apply_reference_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
                     u_bc_ref,eta_bc_ref,coords,dims)

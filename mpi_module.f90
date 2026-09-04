@@ -14,7 +14,7 @@
 		integer(i4b), parameter :: MPIREAL=MPI_REAL8
 #endif
     private
-    public :: mpi_define, block_ring, exchange_halos, MPIREAL
+    public :: mpi_define, block_ring, exchange_halos, exchange_state_halos, MPIREAL
     
 	contains
 	
@@ -141,16 +141,157 @@
 		deallocate(sendbuf,recvbuf)
 
 	end subroutine exchange_halos
+
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	
-	
-	
-	
-	
-	
-	
-	
-	
+	! exchange halos for h/u/v together using Cartesian topology                         !
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	subroutine exchange_state_halos(comm2d, id, ipp, jpp, o_halo, h, u, v)
+		implicit none
+		integer(i4b), intent(in) :: comm2d, id, ipp, jpp, o_halo
+		real(wp), intent(inout), dimension(1-o_halo:o_halo+ipp,1-o_halo:o_halo+jpp) :: h,u,v
+
+		integer(i4b) :: error, nbrleft, nbrright, nbrbottom, nbrtop
+		integer(i4b) :: i,j,k,m,nybuf,nxbuf,nfield
+		real(wp), allocatable :: sendbuf(:), recvbuf(:)
+
+		nfield=3
+		call MPI_CART_SHIFT(comm2d, 0, 1, nbrleft, nbrright, error)
+		call MPI_CART_SHIFT(comm2d, 1, 1, nbrbottom, nbrtop, error)
+
+		! Longitude: pack h,u,v into one message per neighbour.
+		nybuf=nfield*jpp*o_halo
+		allocate(sendbuf(nybuf),recvbuf(nybuf))
+
+		k=0
+		do m=1,nfield
+			do j=1,jpp
+				do i=ipp-o_halo+1,ipp
+					k=k+1
+					select case(m)
+					case(1); sendbuf(k)=h(i,j)
+					case(2); sendbuf(k)=u(i,j)
+					case(3); sendbuf(k)=v(i,j)
+					end select
+				enddo
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nybuf,MPIREAL,nbrright,110, &
+		                  recvbuf,nybuf,MPIREAL,nbrleft,110,comm2d,MPI_STATUS_IGNORE,error)
+		k=0
+		do m=1,nfield
+			do j=1,jpp
+				do i=1-o_halo,0
+					k=k+1
+					select case(m)
+					case(1); h(i,j)=recvbuf(k)
+					case(2); u(i,j)=recvbuf(k)
+					case(3); v(i,j)=recvbuf(k)
+					end select
+				enddo
+			enddo
+		enddo
+
+		k=0
+		do m=1,nfield
+			do j=1,jpp
+				do i=1,o_halo
+					k=k+1
+					select case(m)
+					case(1); sendbuf(k)=h(i,j)
+					case(2); sendbuf(k)=u(i,j)
+					case(3); sendbuf(k)=v(i,j)
+					end select
+				enddo
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nybuf,MPIREAL,nbrleft,111, &
+		                  recvbuf,nybuf,MPIREAL,nbrright,111,comm2d,MPI_STATUS_IGNORE,error)
+		k=0
+		do m=1,nfield
+			do j=1,jpp
+				do i=ipp+1,ipp+o_halo
+					k=k+1
+					select case(m)
+					case(1); h(i,j)=recvbuf(k)
+					case(2); u(i,j)=recvbuf(k)
+					case(3); v(i,j)=recvbuf(k)
+					end select
+				enddo
+			enddo
+		enddo
+		deallocate(sendbuf,recvbuf)
+
+		! Latitude: likewise pack all three prognostic fields together.
+		nxbuf=nfield*ipp*o_halo
+		allocate(sendbuf(nxbuf),recvbuf(nxbuf))
+
+		k=0
+		do m=1,nfield
+			do j=jpp-o_halo+1,jpp
+				do i=1,ipp
+					k=k+1
+					select case(m)
+					case(1); sendbuf(k)=h(i,j)
+					case(2); sendbuf(k)=u(i,j)
+					case(3); sendbuf(k)=v(i,j)
+					end select
+				enddo
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nxbuf,MPIREAL,nbrtop,120, &
+		                  recvbuf,nxbuf,MPIREAL,nbrbottom,120,comm2d,MPI_STATUS_IGNORE,error)
+		if (nbrbottom /= MPI_PROC_NULL) then
+			k=0
+			do m=1,nfield
+				do j=1-o_halo,0
+					do i=1,ipp
+						k=k+1
+						select case(m)
+						case(1); h(i,j)=recvbuf(k)
+						case(2); u(i,j)=recvbuf(k)
+						case(3); v(i,j)=recvbuf(k)
+						end select
+					enddo
+				enddo
+			enddo
+		endif
+
+		k=0
+		do m=1,nfield
+			do j=1,o_halo
+				do i=1,ipp
+					k=k+1
+					select case(m)
+					case(1); sendbuf(k)=h(i,j)
+					case(2); sendbuf(k)=u(i,j)
+					case(3); sendbuf(k)=v(i,j)
+					end select
+				enddo
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nxbuf,MPIREAL,nbrbottom,121, &
+		                  recvbuf,nxbuf,MPIREAL,nbrtop,121,comm2d,MPI_STATUS_IGNORE,error)
+		if (nbrtop /= MPI_PROC_NULL) then
+			k=0
+			do m=1,nfield
+				do j=jpp+1,jpp+o_halo
+					do i=1,ipp
+						k=k+1
+						select case(m)
+						case(1); h(i,j)=recvbuf(k)
+						case(2); u(i,j)=recvbuf(k)
+						case(3); v(i,j)=recvbuf(k)
+						end select
+					enddo
+				enddo
+			enddo
+		endif
+		deallocate(sendbuf,recvbuf)
+
+	end subroutine exchange_state_halos
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	! Block via ring                                                                     !
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
