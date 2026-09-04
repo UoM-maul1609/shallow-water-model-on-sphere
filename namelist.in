@@ -17,7 +17,7 @@
 	nm1%sponge_north_timescale=0., ! seconds at boundary; 0 disables northern sponge
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.false.,
-	nm1%initial_winds=1,  ! 1==saturn_winds, 2==idealised_jet
+	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
 	nm1%u_jet=50.,  ! speed of jet
 	nm1%theta_jet=77., ! latitude of jet
 	nm1%h_jet=1.15, ! standard deviation of jet (width)

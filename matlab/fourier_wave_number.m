@@ -15,8 +15,11 @@ phase=zeros(n_files,np,1);
 for j=1:n_files
     nc=netcdf(fileName{j});
     dt_sec=(nc{'time'}(2)-nc{'time'}(1));
-    [r,c]=size(nc{'vort'}(1,:,:));
-    
+    phi_raw=nc{'phi'}(:);
+    dummy=zeros(1,numel(phi_raw));
+    [~,~,phi_native,~]=cyclic_lon(phi_raw,dummy);
+    c=numel(phi_native);
+
     Fs=c;
     T=1/Fs;
     L=c;
@@ -25,7 +28,9 @@ for j=1:n_files
     f = Fs*(0:(L/2))/L;
 
     for i=1:np
-        X=mean(nc{'v'}(i,50:60,:),1);
+        Xraw=squeeze(mean(nc{'v'}(i,50:60,:),1));
+        Xraw=reshape(Xraw,1,[]);
+        [~,~,~,X]=cyclic_lon(phi_raw,Xraw);
         Y = fft(X);
         P2 = abs(Y/L);
         P1 = P2(1:L/2+1);

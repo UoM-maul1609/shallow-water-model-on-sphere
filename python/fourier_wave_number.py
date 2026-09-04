@@ -12,6 +12,8 @@ import scipy as scy
 import scipy.interpolate as sci
 import scipy.signal as scs
 
+from longitude_utils import strip_duplicated_endpoint
+
 username=getpass.getuser()
 
 if not os.path.exists('/tmp/' + username):
@@ -37,8 +39,10 @@ def fourier_wave_number(fileName):
     for j in range(n_files):
         nc=NetCDFFile(fileName[j]);
         dt_sec=nc['time'][1]-nc['time'][0];
-        r,c = np.shape(nc['vort'][0,:,:]);
-    
+        lons_raw = nc['phi'][:]
+        lons, = strip_duplicated_endpoint(lons_raw)
+        c = len(lons)
+
         Fs=c;
         T=1./Fs;
         L=c;
@@ -46,7 +50,8 @@ def fourier_wave_number(fileName):
         f = Fs*np.mgrid[0:(L/2)+1]/L;
 
         for i in range(np1):
-            X=np.mean(nc['v'][i,50:60+1,:],axis=0);
+            X_raw=np.mean(nc['v'][i,50:60+1,:],axis=0);
+            _, X = strip_duplicated_endpoint(lons_raw, X_raw)
             Y = np.fft.fft(X);
             P2 = np.abs(Y/L);
             P1 = P2[0:int(L/2)+1];
