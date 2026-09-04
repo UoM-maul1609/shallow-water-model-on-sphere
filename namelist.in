@@ -11,7 +11,7 @@
     nm1%smagorinsky_scheme=1, ! 0=legacy Smagorinsky (default), 1=spherical conservative SGS stress
 	nm1%coriolis_scheme=1, ! 0=legacy/original (default), 1=Crank-Nicolson
 	nm1%momentum_metric_terms=1, ! 0=legacy/off (default), 1=spherical curvature + gradient-wind init
-	nm1%lat_boundary_scheme=0, ! 0=legacy frozen latitude ghosts (default), 1=free-slip
+	nm1%lat_boundary_scheme=1, ! 0=legacy frozen latitude ghosts (default), 1=free-slip
 	nm1%sponge_south_width=0., ! degrees; 0 disables southern sponge
 	nm1%sponge_south_timescale=0., ! seconds at boundary; 0 disables southern sponge
 	nm1%sponge_north_width=0., ! degrees; 0 disables northern sponge
@@ -41,7 +41,7 @@
 	nm1%Re=5.45e7, ! radius of Saturn at around 77 N
 !	nm1%rotation_period_hours=10.55,
 	nm1%rotation_period_hours=10.6564,
-	nm1%scale_height=20.e3, ! scale-height of saturn's atmosphere (m)
+	nm1%scale_height=60.e3, ! scale-height of saturn's atmosphere (m)
 						! it's actuall SW equivalent depth, not literal scale height
 						! so might need to try 10,20,40, 60km
 	nm1%ip=400,
