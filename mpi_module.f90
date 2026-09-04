@@ -52,76 +52,94 @@
 		integer(i4b), intent(in) :: comm2d, id, ipp, jpp, o_halo
 		real(wp), intent(inout), &
 			 dimension(1-o_halo:o_halo+ipp,1-o_halo:o_halo+jpp) :: array
-		
-		integer(i4b) :: error, nbrleft, nbrright, nbrbottom, nbrtop, tag1, &
-						request
-		integer(i4b), dimension(MPI_STATUS_SIZE) :: status
-		
-		! Find the processors neighbours
-		call MPI_CART_SHIFT( comm2d, 0, 1, nbrleft, nbrright, error)	
-		call MPI_CART_SHIFT( comm2d, 1, 1, nbrbottom, nbrtop, error)
-		
-! 		print *,id,nbrleft, nbrright, nbrbottom, nbrtop
 
-		
-		! now receive data from top, bottom, left, and right
-		if (nbrleft /= id) then
-			tag1=010
-			! send from left (specify destination):
-			call MPI_Issend(array(ipp+1-o_halo:ipp,1:jpp), jpp, MPIREAL, nbrright, &
-				tag1, MPI_COMM_WORLD, request,error)
-			! receive from left (specify source):
-			call MPI_Recv(array(1-o_halo:0,1:jpp), jpp, MPIREAL, nbrleft, &
-				tag1, MPI_COMM_WORLD, status,error)
-			call MPI_Wait(request, status, error)
-		else
-			array(1-o_halo:0,1:jpp)=array(ipp+1-o_halo:ipp,1:jpp)
-		endif
-		
-		
-		
-		if (nbrright /= id) then
-			tag1=010
-			! send from right (specify destination):
-			call MPI_Issend(array(1:o_halo,1:jpp), jpp, MPIREAL, nbrleft, &
-				tag1, MPI_COMM_WORLD, request,error)
-			! receive from right (specify source):
-			call MPI_Recv(array(ipp+1:ipp+o_halo,1:jpp), jpp, MPIREAL, nbrright, &
-				tag1, MPI_COMM_WORLD, status,error)
-			call MPI_Wait(request, status, error)
-		else
-			array(ipp+1:ipp+o_halo,1:jpp)=array(1:o_halo,1:jpp)
-		endif
-		
-		
-		if ((nbrtop /= id)) then
-			tag1=110
-			! send from top (specify destination):
-			call MPI_Issend(array(1:ipp,jpp+1-o_halo:jpp), ipp, MPIREAL, nbrtop, &
-				tag1, MPI_COMM_WORLD, request,error)
-			! receive from top (specify source):
-			call MPI_Recv(array(1:ipp,1-o_halo:0), ipp, MPIREAL, nbrbottom, &
-				tag1, MPI_COMM_WORLD, status,error)
-			call MPI_Wait(request, status, error)
-		else
-!			array(1:ipp,1-o_halo:0)=array(1:ipp,jpp-o_halo:jpp)
+		integer(i4b) :: error, nbrleft, nbrright, nbrbottom, nbrtop
+		integer(i4b) :: i,j,k,nxbuf,nybuf
+		real(wp), allocatable :: sendbuf(:), recvbuf(:)
+
+		! Neighbour ranks returned by MPI_CART_SHIFT are ranks in comm2d, so all
+		! communication below must also use comm2d.  This is essential when the
+		! Cartesian communicator was created with reorder=.true.
+		call MPI_CART_SHIFT(comm2d, 0, 1, nbrleft, nbrright, error)
+		call MPI_CART_SHIFT(comm2d, 1, 1, nbrbottom, nbrtop, error)
+
+		! Longitude halo columns are strided Fortran array sections.  Pack them
+		! explicitly rather than passing a non-contiguous column to MPI as though
+		! it were contiguous memory.
+		nybuf=jpp*o_halo
+		allocate(sendbuf(nybuf),recvbuf(nybuf))
+
+		k=0
+		do j=1,jpp
+			do i=ipp-o_halo+1,ipp
+				k=k+1; sendbuf(k)=array(i,j)
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nybuf,MPIREAL,nbrright,10, &
+		                  recvbuf,nybuf,MPIREAL,nbrleft,10,comm2d,MPI_STATUS_IGNORE,error)
+		k=0
+		do j=1,jpp
+			do i=1-o_halo,0
+				k=k+1; array(i,j)=recvbuf(k)
+			enddo
+		enddo
+
+		k=0
+		do j=1,jpp
+			do i=1,o_halo
+				k=k+1; sendbuf(k)=array(i,j)
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nybuf,MPIREAL,nbrleft,11, &
+		                  recvbuf,nybuf,MPIREAL,nbrright,11,comm2d,MPI_STATUS_IGNORE,error)
+		k=0
+		do j=1,jpp
+			do i=ipp+1,ipp+o_halo
+				k=k+1; array(i,j)=recvbuf(k)
+			enddo
+		enddo
+		deallocate(sendbuf,recvbuf)
+
+		! Latitude edge strips are also packed explicitly because 1:ipp does not
+		! span the full declared first dimension when longitude halos are present.
+		nxbuf=ipp*o_halo
+		allocate(sendbuf(nxbuf),recvbuf(nxbuf))
+
+		k=0
+		do j=jpp-o_halo+1,jpp
+			do i=1,ipp
+				k=k+1; sendbuf(k)=array(i,j)
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nxbuf,MPIREAL,nbrtop,20, &
+		                  recvbuf,nxbuf,MPIREAL,nbrbottom,20,comm2d,MPI_STATUS_IGNORE,error)
+		if (nbrbottom /= MPI_PROC_NULL) then
+			k=0
+			do j=1-o_halo,0
+				do i=1,ipp
+					k=k+1; array(i,j)=recvbuf(k)
+				enddo
+			enddo
 		endif
 
-		if ((nbrbottom /= id)) then
-			tag1=110
-			! send from bottom (specify destination):
-			call MPI_Issend(array(1:ipp,1:o_halo), ipp, MPIREAL, nbrbottom, &
-				tag1, MPI_COMM_WORLD, request,error)
-			! receive from bottom (specify source):
-			call MPI_Recv(array(1:ipp,jpp+1:jpp+o_halo), ipp, MPIREAL, nbrtop, &
-				tag1, MPI_COMM_WORLD, status,error)
-			call MPI_Wait(request, status, error)
-		else
-!			array(1:ipp,jpp+1:jpp+o_halo)=array(1:ipp,1:o_halo)
+		k=0
+		do j=1,o_halo
+			do i=1,ipp
+				k=k+1; sendbuf(k)=array(i,j)
+			enddo
+		enddo
+		call MPI_Sendrecv(sendbuf,nxbuf,MPIREAL,nbrbottom,21, &
+		                  recvbuf,nxbuf,MPIREAL,nbrtop,21,comm2d,MPI_STATUS_IGNORE,error)
+		if (nbrtop /= MPI_PROC_NULL) then
+			k=0
+			do j=jpp+1,jpp+o_halo
+				do i=1,ipp
+					k=k+1; array(i,j)=recvbuf(k)
+				enddo
+			enddo
 		endif
-		
-		
-					
+		deallocate(sendbuf,recvbuf)
+
 	end subroutine exchange_halos
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	

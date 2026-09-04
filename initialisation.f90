@@ -183,7 +183,8 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! find the number of grid points on each PE                                      !
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		call MPI_CART_COORDS(comm2d, id, 2, coords, error)
+		call MPI_Comm_rank(comm2d, iloc, error)
+		call MPI_CART_COORDS(comm2d, iloc, 2, coords, error)
 ! 		print *,'Coords of ',id,' are ',coords
 
 		! number of grid points in all but last:
@@ -344,52 +345,16 @@
 
 		
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		! set up latitude array need mpi to add them up:                                 !
+		! Latitude coordinates are known analytically from the global j index.            !
+		! Construct them directly rather than propagating coordinates between MPI ranks.  !
+		! This also avoids the old northern-halo dthetan bug, which subtracted a grid      !
+		! spacing from 90 degrees instead of subtracting a latitude.                       !
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		call MPI_CART_SHIFT( comm2d, 1, 1, nbottom, ntop, error)
-		if(nbottom .ne. -1) then
-			tag1=001
-			call MPI_Recv(theta(1-o_halo), 1, MPI_REAL8, nbottom, &
-					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
-		endif
-
-		if(coords(2) == 0) then
-			theta(0) = slat*PI/180._wp-dtheta(0)
-		endif
-
-		do i=1,jpp+o_halo
-			theta(i)=theta(i-1)+dtheta(i-1)
+		do i=1-o_halo,jpp+o_halo
+			theta(i)=slat*PI/180._wp + real(jpstart+i-1,wp)*dtheta(i)
 		enddo
-		
-		if(ntop .ne. -1) then
-			tag1=001
-			call MPI_Send(theta(jpp), 1, MPI_REAL8, ntop, &
-				tag1, MPI_COMM_WORLD,error)
-		endif		
-! 		theta=dtheta(10)*(/(i,i=jpstart+1-o_halo-1,jpstart+jpp+o_halo-1)/) + slat*PI/180._wp
-		
-		
-
-		
 		thetan=theta+dtheta/2._wp
-		do i=1-o_halo,jpp
-			dthetan(i)=thetan(i+1)-thetan(i)
-		enddo
-		
-		! if this is the top then set dtheta:
-
-		if(ntop == -1 ) then
-			dthetan(jpp+1)=2._wp*(90._wp*PI/180._wp -dthetan(jpp))
-		endif 
-		if(ntop /= -1 ) then
-			call MPI_Recv(dthetan(jpp+o_halo), 1, MPI_REAL8, ntop, &
-					tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
-		endif 
-		if(nbottom /= -1 ) then
-			call MPI_Send(dthetan(1), 1, MPI_REAL8, nbottom, &
-					tag1, MPI_COMM_WORLD,error)
-		endif 	
-! 		dthetan=(nlat-slat) / real(jp-1,wp) * PI/180._wp  ! lat
+		dthetan=dtheta
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -489,7 +454,8 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! calculate the height field from winds	- MPI needed to span sub-domains		 !
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!		
-		call MPI_CART_COORDS(comm2d, id, 2, coords, error)
+		call MPI_Comm_rank(comm2d, iloc, error)
+		call MPI_CART_COORDS(comm2d, iloc, 2, coords, error)
 		call MPI_CART_SHIFT( comm2d, 1, 1, nbottom, ntop, error)	
 		
 		! if the y coordinate is not the most northerly
@@ -498,9 +464,9 @@
 			tag1=2010
 			call MPI_Recv(height(:,jpp+1:jpp+o_halo),& ! the data packet to receive into
 				ipp+2*o_halo, & ! size of the data packet
-				MPI_REAL8, &
+				MPIREAL, &
 				ntop, & ! receive from above (north)
-				tag1, MPI_COMM_WORLD, MPI_STATUS_IGNORE,error)
+				tag1, comm2d, MPI_STATUS_IGNORE,error)
 		
 		endif		
 		! if most northerly grid point (note set the jpp+1 point)
@@ -540,9 +506,9 @@
 			tag1=2010
 			call MPI_Send(height(:,1:1),& ! the data packet to send
 				ipp+2*o_halo, & ! size of the data packet
-				MPI_REAL8, &
+				MPIREAL, &
 				nbottom, & ! send to below (south)
-				tag1, MPI_COMM_WORLD,error)
+				tag1, comm2d,error)
 		
 		endif
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -105,17 +105,18 @@
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! Set-up the Cartesian topology										   !
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		! note the min is so that there is not more than 1 proc per grid point
-		mp1%dx=min( floor( sqrt(real(mp1%rank,wp)) ), nm1%ip)
-		mp1%dy=min( floor( real(mp1%rank,wp) / real(mp1%dx,wp) ), nm1%jp )
+		! Let MPI choose a factorisation that uses every process.  Keep
+		! reorder=.true.; all Cartesian neighbour communication uses ring_comm.
+		mp1%dims=[0_i4b,0_i4b]
+		call MPI_Dims_create(mp1%rank,mp1%ndim,mp1%dims,mp1%error)
+		mp1%dx=mp1%dims(1)
+		mp1%dy=mp1%dims(2)
 
 		if(mp1%id == world_process) then
-			print *,'Cartesian topology: ',mp1%dx, mp1%dy			
-			if ( mp1%dx * mp1%dy < mp1%rank) print *, 'warning wasted processors'
+			print *,'Cartesian topology: ',mp1%dx, mp1%dy
 		endif
 
 		mp1%periods=[.true.,.false.]
-		mp1%dims=[mp1%dx,mp1%dy]
 		! cart topo:
 		call MPI_CART_CREATE( MPI_COMM_WORLD, mp1%ndim, mp1%dims, &
 							mp1%periods, mp1%reorder,mp1%ring_comm, mp1%error )

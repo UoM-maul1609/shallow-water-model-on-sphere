@@ -108,7 +108,7 @@
 		real(wp) :: time, time_last_output, output_time
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
 				u_old, v_old, h_old, u_sgs, v_sgs, h_sgs, &
-                tau_uu, tau_uv, tau_vv, u_bc_ref, eta_bc_ref
+                tau_uu, tau_uv, tau_vv, u_bc_ref, v_bc_ref, eta_bc_ref
 		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco, &
                 sgs_mom_u, sgs_mom_v, mom_u_tmp, mom_v_tmp, &
                 h_sponge_ref, u_sponge_ref, v_sponge_ref
@@ -120,10 +120,12 @@
 		output_time=output_interval
 		rank2=dims(1)*dims(2)
 
-        ! Latitude boundary setup.  Scheme 0 deliberately preserves the
-        ! legacy frozen physical ghost cells.  Scheme 1 uses reflecting
-        ! free-slip ghost cells and exact zero normal mass flux at the
-        ! Lax-Wendroff latitude faces.
+        ! Latitude boundary setup.
+        !   0 = legacy frozen physical ghosts
+        !   1 = reflecting free-slip wall (zero normal mass flux)
+        !   2 = balanced radiative/open boundary for perturbations
+        ! Only scheme 1 is a solid wall, so only it activates the explicit
+        ! zero-normal-flux constraints inside lax_wendroff_ll.
         select case (lat_boundary_scheme)
         case (0)
             south_wall=.false.
@@ -131,37 +133,49 @@
         case (1)
             south_wall=(coords(2) == 0)
             north_wall=(coords(2) == dims(2)-1)
+        case (2)
+            south_wall=.false.
+            north_wall=.false.
         case default
             write(*,*) 'ERROR: unknown lat_boundary_scheme = ',lat_boundary_scheme
-            write(*,*) '       valid values are 0 (legacy) and 1 (free-slip)'
+            write(*,*) '       valid values are 0 (legacy), 1 (free-slip), 2 (radiative)'
             stop 1
         end select
 
-        if (lat_boundary_scheme == 1) then
+        if (lat_boundary_scheme == 1 .or. lat_boundary_scheme == 2) then
             if (sponge_south_width < 0._wp .or. sponge_north_width < 0._wp .or. &
                 sponge_south_timescale < 0._wp .or. sponge_north_timescale < 0._wp) then
                 write(*,*) 'ERROR: sponge widths/timescales must be >= 0'
                 stop 1
             endif
 
-            ! Save the initial model state as the sponge reference.
+            ! Save the initial physical state as the sponge reference.
             h_sponge_ref=h(1:ipp,1:jpp)
             u_sponge_ref=u(1:ipp,1:jpp)
             v_sponge_ref=v(1:ipp,1:jpp)
 
-            ! Ensure the first diagnostic/advection call sees free-slip halos.
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, hs)
-            ! Construct the balanced wall once at t=0, then freeze that
-            ! background continuation as the reference state. Subsequent
-            ! timesteps reflect perturbations about this reference rather than
-            ! recomputing an instantaneous gradient-wind slope from evolving u.
-            call apply_balanced_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v,theta,f_cor, &
-                re,g,momentum_metric_terms,coords,dims)
+
+            if (lat_boundary_scheme == 1) then
+                ! Construct the balanced free-slip wall once at t=0, then
+                ! freeze that background continuation as the reference state.
+                call apply_balanced_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v,theta,f_cor, &
+                    re,g,momentum_metric_terms,coords,dims)
+            endif
+
+            ! The radiative BC uses the untouched initialized continuation as
+            ! its reference; the free-slip BC uses the balanced wall continuation.
             u_bc_ref = u
+            v_bc_ref = v
             eta_bc_ref = h + hs
+
+            if (lat_boundary_scheme == 2) then
+                call apply_reference_radiative_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                    u_bc_ref,v_bc_ref,eta_bc_ref,g,coords,dims)
+            endif
         endif
 
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -178,6 +192,8 @@
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			time=real(n-1,wp)*dt
 			if (time-time_last_output >= output_interval) then
+                ! Total free-surface height evolves with h; keep this diagnostic current.
+                height(1:ipp,1:jpp)=h(1:ipp,1:jpp)+hs(1:ipp,1:jpp)
 				if (id==world_process) &
 					print *,'output no ',cur,' at time (hrs) ', &
 						time/3600._wp,n,' steps of ',ntim
@@ -271,6 +287,9 @@
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
                 if (lat_boundary_scheme == 1) then
                     call apply_reference_vector_free_slip_lat_halos(ipp,jpp,o_halo,u,v,u_bc_ref,coords,dims)
+                else if (lat_boundary_scheme == 2) then
+                    call apply_reference_radiative_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                        u_bc_ref,v_bc_ref,eta_bc_ref,g,coords,dims)
                 endif
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -310,6 +329,9 @@
 						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
                         if (lat_boundary_scheme == 1) then
                             call apply_reference_height_lat_halos(ipp,jpp,o_halo,h,hs,eta_bc_ref,coords,dims)
+                        else if (lat_boundary_scheme == 2) then
+                            call apply_reference_radiative_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                                u_bc_ref,v_bc_ref,eta_bc_ref,g,coords,dims)
                         endif
 						u_sgs = 0.5_wp*(u_old+u)
 						v_sgs = 0.5_wp*(v_old+v)
@@ -353,7 +375,8 @@
 					end select
 
 				case default
-					print *,'error subgrid ',subgrid_model
+					print *,'ERROR: unknown subgrid_model = ',subgrid_model
+                    stop 1
 				end select
 
 				! Existing extra equatorial v viscosity.  In the new SGS path
@@ -361,6 +384,12 @@
 				if ((subgrid_model == 2) .and. (smagorinsky_scheme == 1) .and. &
 					(abs(vis_eq) > tiny(1._wp))) then
 					call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+                    if (lat_boundary_scheme == 1) then
+                        call apply_reference_vector_free_slip_lat_halos(ipp,jpp,o_halo,u,v,u_bc_ref,coords,dims)
+                    else if (lat_boundary_scheme == 2) then
+                        call apply_reference_radiative_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                            u_bc_ref,v_bc_ref,eta_bc_ref,g,coords,dims)
+                    endif
 					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(v_old+v), delsq,re,&
 						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 						recq, cq_s, dp1, dq)
@@ -382,6 +411,9 @@
 					call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
                     if (lat_boundary_scheme == 1) then
                         call apply_even_lat_halos(ipp,jpp,o_halo,h,coords,dims)
+                    else if (lat_boundary_scheme == 2) then
+                        call apply_reference_radiative_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                            u_bc_ref,v_bc_ref,eta_bc_ref,g,coords,dims)
                     endif
 					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(h_old+h), delsq,re,&
 						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
@@ -396,7 +428,7 @@
 
             ! Optional latitude sponge. A zero width or zero timescale disables
             ! that side. The damping ramp is quadratic in distance into the zone.
-            if (lat_boundary_scheme == 1) then
+            if (lat_boundary_scheme == 1 .or. lat_boundary_scheme == 2) then
                 call apply_latitude_sponge(ipp,jpp,o_halo,dt,h,u,v, &
                     h_sponge_ref,u_sponge_ref,v_sponge_ref,theta,slat,nlat, &
                     sponge_south_width,sponge_north_width, &
@@ -412,6 +444,9 @@
             if (lat_boundary_scheme == 1) then
                 call apply_reference_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
                     u_bc_ref,eta_bc_ref,coords,dims)
+            else if (lat_boundary_scheme == 2) then
+                call apply_reference_radiative_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                    u_bc_ref,v_bc_ref,eta_bc_ref,g,coords,dims)
             endif
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			
@@ -641,6 +676,65 @@
             enddo
         endif
     end subroutine apply_even_lat_halos
+
+    ! Balanced radiative/open latitude ghosts.  The incoming linear
+    ! shallow-water characteristic is set to zero relative to the initialized
+    ! reference state, while the outgoing characteristic is extrapolated from
+    ! the adjacent physical row.  Tangential-wind perturbations use zero normal
+    ! gradient.  Unlike scheme 1, this does not impose zero meridional mass flux.
+    subroutine apply_reference_radiative_lat_halos(ip,jp,o_halo,h,hs,u,v, &
+            u_ref,v_ref,eta_ref,g,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), intent(in) :: g
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: h,u,v
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(in) :: &
+            hs,u_ref,v_ref,eta_ref
+        integer(i4b) :: i,k,jg,ji
+        real(wp) :: c, eta_p, v_p, rout, eta_pg, v_pg, href
+
+        if (coords(2) == 0) then
+            ji=1
+            do k=1,o_halo
+                jg=1-k
+                do i=1,ip
+                    href=max(eta_ref(i,ji)-hs(i,ji),tiny(1._wp))
+                    c=sqrt(g*href)
+                    eta_p=(h(i,ji)+hs(i,ji))-eta_ref(i,ji)
+                    v_p=v(i,ji)-v_ref(i,ji)
+                    ! At the south edge, R- = v' - g*eta'/c is outgoing.
+                    rout=v_p-g*eta_p/c
+                    v_pg=0.5_wp*rout
+                    eta_pg=-0.5_wp*c*rout/g
+                    h(i,jg)=eta_ref(i,jg)+eta_pg-hs(i,jg)
+                    v(i,jg)=v_ref(i,jg)+v_pg
+                    u(i,jg)=u_ref(i,jg)+(u(i,ji)-u_ref(i,ji))
+                enddo
+            enddo
+        endif
+
+        if (coords(2) == dims(2)-1) then
+            ji=jp
+            do k=1,o_halo
+                jg=jp+k
+                do i=1,ip
+                    href=max(eta_ref(i,ji)-hs(i,ji),tiny(1._wp))
+                    c=sqrt(g*href)
+                    eta_p=(h(i,ji)+hs(i,ji))-eta_ref(i,ji)
+                    v_p=v(i,ji)-v_ref(i,ji)
+                    ! At the north edge, R+ = v' + g*eta'/c is outgoing.
+                    rout=v_p+g*eta_p/c
+                    v_pg=0.5_wp*rout
+                    eta_pg=0.5_wp*c*rout/g
+                    h(i,jg)=eta_ref(i,jg)+eta_pg-hs(i,jg)
+                    v(i,jg)=v_ref(i,jg)+v_pg
+                    u(i,jg)=u_ref(i,jg)+(u(i,ji)-u_ref(i,ji))
+                enddo
+            enddo
+        endif
+    end subroutine apply_reference_radiative_lat_halos
 
     ! Exact exponential relaxation toward the initial state. Widths are degrees
     ! latitude and taus are the e-folding seconds at the physical boundary.
@@ -1000,11 +1094,12 @@
 			call check( nf90_inq_varid(ncid, "f_cor", varid ) )
 			call check( nf90_put_var(ncid, varid, f_cor(1:ipp,1:jpp), &
 						start = (/1+ipstart,1+jpstart/)))	
-			! write variable: height
-			call check( nf90_inq_varid(ncid, "height", varid ) )
-			call check( nf90_put_var(ncid, varid, height(1:ipp,1:jpp), &
-						start = (/1+ipstart,1+jpstart,1/)))	
 		endif
+
+        ! write variable: height (total free surface) at every output time
+        call check( nf90_inq_varid(ncid, "height", varid ) )
+        call check( nf90_put_var(ncid, varid, height(1:ipp,1:jpp), &
+                    start = (/1+ipstart,1+jpstart,n/)))
 
 		if(id==world_process) then
 			! write variable: time

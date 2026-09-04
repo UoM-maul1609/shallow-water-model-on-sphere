@@ -1,6 +1,6 @@
 
  &run_vars
- 	nm1%inputfile  = 'saturn_winds_vs_latitude.nc'
+ 	nm1%inputfile  = 'saturn_winds_vs_latitude_update.nc'
 	nm1%outputfile = '/tmp/output.nc',
 	nm1%add_random_height_noise=.true.,
 	nm1%height_noise_scheme=1, ! 0=legacy grid-cell noise (default), 1=correlated physical-scale noise
@@ -11,20 +11,20 @@
     nm1%smagorinsky_scheme=1, ! 0=legacy Smagorinsky (default), 1=spherical conservative SGS stress
 	nm1%coriolis_scheme=1, ! 0=legacy/original (default), 1=Crank-Nicolson
 	nm1%momentum_metric_terms=1, ! 0=legacy/off (default), 1=spherical curvature + gradient-wind init
-	nm1%lat_boundary_scheme=1, ! 0=legacy frozen latitude ghosts (default), 1=free-slip
-	nm1%sponge_south_width=0., ! degrees; 0 disables southern sponge
+	nm1%lat_boundary_scheme=2, ! 0=legacy frozen ghosts, 1=free-slip wall, 2=radiative/open
+	nm1%sponge_south_width=0., ! degrees inward from the actual southern model latitude; 0 disables
 	nm1%sponge_south_timescale=0., ! seconds at boundary; 0 disables southern sponge
-	nm1%sponge_north_width=0., ! degrees; 0 disables northern sponge
+	nm1%sponge_north_width=0., ! degrees inward from the actual northern model latitude; 0 disables
 	nm1%sponge_north_timescale=0., ! seconds at boundary; 0 disables northern sponge
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.false.,
-	nm1%initial_winds=1,  ! 1==saturn_winds, 2==idealised_jet
+	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet
 	nm1%u_jet=50.,  ! speed of jet
-	nm1%theta_jet=77., ! latitude of jet
+	nm1%theta_jet=73., ! latitude of jet
 	nm1%h_jet=1.15, ! standard deviation of jet (width)
 	nm1%nudge=.true.,
 	nm1%nudge_scheme=1, ! 0=legacy/default, 1=nudge global zonal-mean u only
-	nm1%nudge_timescale=1.7e6, ! default 6.e5 seconds (about 7 days) (1.728e6=20 days)
+	nm1%nudge_timescale=6.e5, ! default 6.e5 seconds (about 7 days) (1.728e6=20 days)
 	nm1%restart=.false.,
 	nm1%wind_factor=1.0,
 	nm1%wind_shift=0.0,
@@ -33,8 +33,8 @@
 	nm1%cvis=0.15, ! usually between 0.1 and 0.2
 	nm1%vis_eq=1.e8, ! viscosity for v over equator region
 	nm1%lat_eq=20., ! latitude north and south over which to apply vis_eq
-	nm1%runtime= 7776000.,
-	nm1%dt=30.,
+	nm1%runtime= 7776000, !15552000., !7776000.,
+	nm1%dt=60.,
 	nm1%output_interval=57600.,
 	nm1%grav=10.44,		! gravity
 	nm1%rho=0.19,		! density
@@ -45,8 +45,8 @@
 						! it's actuall SW equivalent depth, not literal scale height
 						! so might need to try 10,20,40, 60km
 	nm1%ip=400,
-	nm1%jp=240,
+	nm1%jp=120,
 	nm1%slat=-90.,
 	nm1%nlat=90.,
-	nm1%slat_thresh=65.,
+	nm1%slat_thresh=45.,
 	nm1%nlat_thresh=86.5/
