@@ -46,14 +46,19 @@
                         coriolis_scheme=0_i4b, &
                         momentum_metric_terms=0_i4b, &
                         smagorinsky_scheme=0_i4b, &
-                        height_noise_scheme=0_i4b
+                        height_noise_scheme=0_i4b, &
+                        lat_boundary_scheme=0_i4b
             real(wp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &
             			slat, nlat, slat_thresh, nlat_thresh, nudge_timescale, &
             			u_jet, theta_jet, h_jet, cvis, vis_eq, lat_eq, &
                         height_noise_amplitude=100._wp, &
-                        height_noise_corr_length=5.e5_wp
+                        height_noise_corr_length=5.e5_wp, &
+                        sponge_south_width=0._wp, &
+                        sponge_north_width=0._wp, &
+                        sponge_south_timescale=0._wp, &
+                        sponge_north_timescale=0._wp
         end type namelist_input
 
 

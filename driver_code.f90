@@ -69,6 +69,8 @@
 				new_file,outputfile, output_interval, nudge, nudge_tau, &
 				subgrid_model, viscous_dissipation, dissipate_h,vis, cvis, &
 				vis_eq, lat_eq, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme, &
+                lat_boundary_scheme, sponge_south_width, sponge_north_width, &
+                sponge_south_timescale, sponge_north_timescale, slat, nlat, &
 				dims,id, world_process, rank, ring_comm)
 		use numerics_type
 		use mpi_module
@@ -78,7 +80,8 @@
 		logical, intent(inout) :: new_file
 		logical, intent(in) :: nudge, viscous_dissipation, dissipate_h
 		integer(i4b), intent(in) :: ip,ipp, jp,jpp, ntim, o_halo, ipstart, jpstart, &
-									subgrid_model, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme
+									subgrid_model, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme, &
+                                    lat_boundary_scheme
 		integer(i4b), intent(in) :: id, world_process, ring_comm, rank
 		integer(i4b), dimension(2), intent(in) :: coords, dims
 		character (len=*), intent(in) :: outputfile
@@ -87,28 +90,70 @@
 		real(wp), dimension(1-o_halo:jpp+o_halo), intent(in) :: theta, thetan, u_nudge, &
 																dtheta, dthetan
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
-					intent(in) :: f_cor, hs, &
+					intent(in) :: f_cor, &
     				recqdp, recqdp_s, recqdq_s, redq_s, redq, &
     				recq, cq_s, cq, dp1, dq, recqdq
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
-					intent(inout) :: h, u, v, height
+					intent(inout) :: h, hs, u, v, height
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), &
 					intent(in) :: dx, dy, x, y
-		real(wp), intent(in) :: vis, nudge_tau, cvis, lat_eq, vis_eq
+		real(wp), intent(in) :: vis, nudge_tau, cvis, lat_eq, vis_eq, &
+                            sponge_south_width, sponge_north_width, &
+                            sponge_south_timescale, sponge_north_timescale, slat, nlat
 					
 		! locals:		
 		integer(i4b) :: n, cur=1, j, error, rank2
+        logical :: south_wall, north_wall
 		real(wp) :: time, time_last_output, output_time
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
 				u_old, v_old, h_old, u_sgs, v_sgs, h_sgs, &
                 tau_uu, tau_uv, tau_vv
 		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco, &
-                sgs_mom_u, sgs_mom_v, mom_u_tmp, mom_v_tmp
+                sgs_mom_u, sgs_mom_v, mom_u_tmp, mom_v_tmp, &
+                h_sponge_ref, u_sponge_ref, v_sponge_ref
 		
 
 		time_last_output=-output_interval
 		output_time=output_interval
 		rank2=dims(1)*dims(2)
+
+        ! Latitude boundary setup.  Scheme 0 deliberately preserves the
+        ! legacy frozen physical ghost cells.  Scheme 1 uses reflecting
+        ! free-slip ghost cells and exact zero normal mass flux at the
+        ! Lax-Wendroff latitude faces.
+        select case (lat_boundary_scheme)
+        case (0)
+            south_wall=.false.
+            north_wall=.false.
+        case (1)
+            south_wall=(coords(2) == 0)
+            north_wall=(coords(2) == dims(2)-1)
+        case default
+            write(*,*) 'ERROR: unknown lat_boundary_scheme = ',lat_boundary_scheme
+            write(*,*) '       valid values are 0 (legacy) and 1 (free-slip)'
+            stop 1
+        end select
+
+        if (lat_boundary_scheme == 1) then
+            if (sponge_south_width < 0._wp .or. sponge_north_width < 0._wp .or. &
+                sponge_south_timescale < 0._wp .or. sponge_north_timescale < 0._wp) then
+                write(*,*) 'ERROR: sponge widths/timescales must be >= 0'
+                stop 1
+            endif
+
+            ! Save the initial model state as the sponge reference.
+            h_sponge_ref=h(1:ipp,1:jpp)
+            u_sponge_ref=u(1:ipp,1:jpp)
+            v_sponge_ref=v(1:ipp,1:jpp)
+
+            ! Ensure the first diagnostic/advection call sees free-slip halos.
+            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
+            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
+            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+            call exchange_halos(ring_comm, id, ipp, jpp, o_halo, hs)
+            call apply_balanced_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v,theta,f_cor, &
+                re,g,momentum_metric_terms,coords,dims)
+        endif
 
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! time-loop                                                                      !
@@ -153,7 +198,8 @@
 			v_old=v
 			call lax_wendroff_ll(ipp,jpp,o_halo,dt,g,u,v,h,hs,re,&
 	    		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, f_cor, &
-    			recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, coriolis_scheme, momentum_metric_terms)	    		
+    			recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, &
+                coriolis_scheme, momentum_metric_terms, south_wall, north_wall)	    		
 ! 			call lax_wendroff_sphere(ipp,jpp,o_halo,dt,dx,dy,g,u,v,h,hs,re,theta,f_cor)
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -204,6 +250,9 @@
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+                if (lat_boundary_scheme == 1) then
+                    call apply_vector_free_slip_lat_halos(ipp,jpp,o_halo,u,v,coords,dims)
+                endif
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 				select case(subgrid_model)
@@ -240,6 +289,9 @@
 						! Evaluate h, u, v at the old/new midpoint, matching the
 						! time-centred treatment used by the legacy viscosity.
 						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
+                        if (lat_boundary_scheme == 1) then
+                            call apply_even_lat_halos(ipp,jpp,o_halo,h,coords,dims)
+                        endif
 						u_sgs = 0.5_wp*(u_old+u)
 						v_sgs = 0.5_wp*(v_old+v)
 						h_sgs = 0.5_wp*(h_old+h)
@@ -309,6 +361,9 @@
 				! acts on momentum, not layer thickness.
 				if (dissipate_h .and. (subgrid_model == 1)) then
 					call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
+                    if (lat_boundary_scheme == 1) then
+                        call apply_even_lat_halos(ipp,jpp,o_halo,h,coords,dims)
+                    endif
 					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(h_old+h), delsq,re,&
 						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 						recq, cq_s, dp1, dq)
@@ -320,12 +375,25 @@
 
 
 
+            ! Optional latitude sponge. A zero width or zero timescale disables
+            ! that side. The damping ramp is quadratic in distance into the zone.
+            if (lat_boundary_scheme == 1) then
+                call apply_latitude_sponge(ipp,jpp,o_halo,dt,h,u,v, &
+                    h_sponge_ref,u_sponge_ref,v_sponge_ref,theta,slat,nlat, &
+                    sponge_south_width,sponge_north_width, &
+                    sponge_south_timescale,sponge_north_timescale)
+            endif
+
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			! halo exchanges                                                             !
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
 			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
 			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+            if (lat_boundary_scheme == 1) then
+                call apply_balanced_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v,theta,f_cor, &
+                    re,g,momentum_metric_terms,coords,dims)
+            endif
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			
 ! 			if(coords(2)==(dims(2)-1)) then
@@ -360,6 +428,154 @@
 	
 	
 	
+
+    ! Balanced impermeable free-slip latitude ghosts.  Tangential velocity
+    ! is reflected evenly, normal velocity oddly, and the total free-surface
+    ! height eta=h+hs is extrapolated with the local geostrophic/gradient-wind
+    ! slope.  This avoids imposing the unphysical d(h+hs)/dtheta=0 condition
+    ! at a rotating free-slip wall.
+    subroutine apply_balanced_free_slip_lat_halos(ip,jp,o_halo,h,hs,u,v,theta,f_cor, &
+                                                   re,g,momentum_metric_terms,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo,momentum_metric_terms
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), intent(in) :: re,g
+        real(wp), dimension(1-o_halo:jp+o_halo), intent(in) :: theta
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(in) :: f_cor
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: h,hs,u,v
+        integer(i4b) :: k, ji, jg
+        real(wp) :: theta_face, dtheta_pair
+        real(wp), dimension(1-o_halo:ip+o_halo) :: f_face, u_face, deta_dtheta, eta_i
+
+        if (momentum_metric_terms /= 0 .and. momentum_metric_terms /= 1) then
+            write(*,*) 'ERROR: unknown momentum_metric_terms in latitude BC = ',momentum_metric_terms
+            stop 1
+        endif
+
+        if (coords(2) == 0) then
+            do k=1,o_halo
+                ji=k
+                jg=1-k
+                ! Free-slip velocity reflection.
+                u(:,jg)=u(:,ji)
+                v(:,jg)=-v(:,ji)
+                ! Continue static topography evenly across the artificial wall.
+                hs(:,jg)=hs(:,ji)
+
+                theta_face=0.5_wp*(theta(jg)+theta(ji))
+                dtheta_pair=theta(jg)-theta(ji)
+                f_face=0.5_wp*(f_cor(:,jg)+f_cor(:,ji))
+                u_face=u(:,ji)
+                deta_dtheta=-(re*f_face*u_face)/g
+                if (momentum_metric_terms == 1) then
+                    deta_dtheta=deta_dtheta-(u_face*u_face*tan(theta_face))/g
+                endif
+                eta_i=h(:,ji)+hs(:,ji)
+                h(:,jg)=eta_i+deta_dtheta*dtheta_pair-hs(:,jg)
+            enddo
+        endif
+
+        if (coords(2) == dims(2)-1) then
+            do k=1,o_halo
+                ji=jp+1-k
+                jg=jp+k
+                u(:,jg)=u(:,ji)
+                v(:,jg)=-v(:,ji)
+                hs(:,jg)=hs(:,ji)
+
+                theta_face=0.5_wp*(theta(jg)+theta(ji))
+                dtheta_pair=theta(jg)-theta(ji)
+                f_face=0.5_wp*(f_cor(:,jg)+f_cor(:,ji))
+                u_face=u(:,ji)
+                deta_dtheta=-(re*f_face*u_face)/g
+                if (momentum_metric_terms == 1) then
+                    deta_dtheta=deta_dtheta-(u_face*u_face*tan(theta_face))/g
+                endif
+                eta_i=h(:,ji)+hs(:,ji)
+                h(:,jg)=eta_i+deta_dtheta*dtheta_pair-hs(:,jg)
+            enddo
+        endif
+    end subroutine apply_balanced_free_slip_lat_halos
+
+    subroutine apply_vector_free_slip_lat_halos(ip,jp,o_halo,u,v,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: u,v
+        integer(i4b) :: k
+        if (coords(2) == 0) then
+            do k=1,o_halo
+                u(:,1-k)=u(:,k)
+                v(:,1-k)=-v(:,k)
+            enddo
+        endif
+        if (coords(2) == dims(2)-1) then
+            do k=1,o_halo
+                u(:,jp+k)=u(:,jp+1-k)
+                v(:,jp+k)=-v(:,jp+1-k)
+            enddo
+        endif
+    end subroutine apply_vector_free_slip_lat_halos
+
+    subroutine apply_even_lat_halos(ip,jp,o_halo,a,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: a
+        integer(i4b) :: k
+        if (coords(2) == 0) then
+            do k=1,o_halo
+                a(:,1-k)=a(:,k)
+            enddo
+        endif
+        if (coords(2) == dims(2)-1) then
+            do k=1,o_halo
+                a(:,jp+k)=a(:,jp+1-k)
+            enddo
+        endif
+    end subroutine apply_even_lat_halos
+
+    ! Exact exponential relaxation toward the initial state. Widths are degrees
+    ! latitude and taus are the e-folding seconds at the physical boundary.
+    subroutine apply_latitude_sponge(ip,jp,o_halo,dt,h,u,v,h_ref,u_ref,v_ref,theta, &
+            slat,nlat,south_width,north_width,south_tau,north_tau)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        real(wp), intent(in) :: dt,slat,nlat,south_width,north_width,south_tau,north_tau
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: h,u,v
+        real(wp), dimension(1:ip,1:jp), intent(in) :: h_ref,u_ref,v_ref
+        real(wp), dimension(1-o_halo:jp+o_halo), intent(in) :: theta
+        integer(i4b) :: j
+        real(wp) :: lat_deg,xi,rate,damp
+
+        do j=1,jp
+            lat_deg=theta(j)*180._wp/pi
+            rate=0._wp
+            if (south_width > 0._wp .and. south_tau > 0._wp) then
+                if (lat_deg < slat+south_width) then
+                    xi=max(0._wp,min(1._wp,(slat+south_width-lat_deg)/south_width))
+                    rate=rate+xi*xi/south_tau
+                endif
+            endif
+            if (north_width > 0._wp .and. north_tau > 0._wp) then
+                if (lat_deg > nlat-north_width) then
+                    xi=max(0._wp,min(1._wp,(lat_deg-(nlat-north_width))/north_width))
+                    rate=rate+xi*xi/north_tau
+                endif
+            endif
+            if (rate > 0._wp) then
+                damp=exp(-dt*rate)
+                h(1:ip,j)=h_ref(:,j)+damp*(h(1:ip,j)-h_ref(:,j))
+                u(1:ip,j)=u_ref(:,j)+damp*(u(1:ip,j)-u_ref(:,j))
+                v(1:ip,j)=v_ref(:,j)+damp*(v(1:ip,j)-v_ref(:,j))
+            endif
+        enddo
+    end subroutine apply_latitude_sponge
+
 	!>@author
 	!>Paul J. Connolly, The University of Manchester
 	!>@brief

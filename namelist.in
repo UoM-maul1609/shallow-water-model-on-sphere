@@ -8,8 +8,13 @@
 	nm1%height_noise_corr_length=5.e5, ! Gaussian sigma in metres; used only for scheme=1
 	nm1%initially_geostrophic=.true.,
 	nm1%subgrid_model=2, ! 1 = constant viscosity, 2=smagorinsky
-	nm1%coriolis_scheme=0, ! 0=legacy/original (default), 1=Crank-Nicolson
-	nm1%momentum_metric_terms=0, ! 0=legacy/off (default), 1=spherical curvature + gradient-wind init
+	nm1%coriolis_scheme=1, ! 0=legacy/original (default), 1=Crank-Nicolson
+	nm1%momentum_metric_terms=1, ! 0=legacy/off (default), 1=spherical curvature + gradient-wind init
+	nm1%lat_boundary_scheme=0, ! 0=legacy frozen latitude ghosts (default), 1=free-slip
+	nm1%sponge_south_width=0., ! degrees; 0 disables southern sponge
+	nm1%sponge_south_timescale=0., ! seconds at boundary; 0 disables southern sponge
+	nm1%sponge_north_width=0., ! degrees; 0 disables northern sponge
+	nm1%sponge_north_timescale=0., ! seconds at boundary; 0 disables northern sponge
 	nm1%viscous_dissipation=.true.,
 	nm1%dissipate_h=.false.,
 	nm1%initial_winds=2,  ! 1==saturn_winds, 2==idealised_jet

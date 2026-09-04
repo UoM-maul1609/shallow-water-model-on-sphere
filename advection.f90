@@ -196,11 +196,13 @@
 	!>\f$ \frac{\partial \psi}{\partial t} + \frac{\partial u \psi}{\partial x} = 0 \f$
     subroutine lax_wendroff_ll(ip,jp,o_halo,dt,g,u,v,h,hs,re,&
     		theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, f_cor, &
-    		recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, coriolis_scheme, momentum_metric_terms)
+    		recqdq, recqdp, recqdp_s, recqdq_s, redq_s, redq, cq, cq_s, &
+            coriolis_scheme, momentum_metric_terms, south_wall, north_wall)
 
 		use numerics_type
 		implicit none
 		integer(i4b), intent(in) :: ip,jp,o_halo, coriolis_scheme, momentum_metric_terms
+        logical, intent(in) :: south_wall, north_wall
 		real(wp), intent(in) :: dt, g, re
 		real(wp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
 																		hs, f_cor, &
@@ -305,6 +307,18 @@
                 (metric_v(1:ip+1,1:jp)+metric_v(0:ip,1:jp))
             vh_mid_yt(1:ip,0:jp) = vh_mid_yt(1:ip,0:jp) + 0.25_wp*dt* &
                 (metric_v(1:ip,1:jp+1)+metric_v(1:ip,0:jp))
+        endif
+
+        ! Impermeable free-slip latitude walls.  The ghost-cell height has
+        ! already been set to continue the balanced free-surface slope.  Keep
+        ! the Lax-Wendroff predicted h/uh at the wall so the pressure flux sees
+        ! that slope; constrain only the normal momentum to guarantee exactly
+        ! zero normal mass and advective momentum flux.
+        if (south_wall) then
+            vh_mid_yt(1:ip,0)=0._wp
+        endif
+        if (north_wall) then
+            vh_mid_yt(1:ip,jp)=0._wp
         endif
 
 ! 		calculate mid-point value of cos (theta)

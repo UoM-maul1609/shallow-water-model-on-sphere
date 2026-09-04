@@ -185,7 +185,10 @@
 				nm1%subgrid_model, nm1%viscous_dissipation, &
 				nm1%dissipate_h,nm1%vis,nm1%cvis, &
 				nm1%vis_eq,nm1%lat_eq, nm1%coriolis_scheme, nm1%momentum_metric_terms, &
-                nm1%smagorinsky_scheme, &
+                nm1%smagorinsky_scheme, nm1%lat_boundary_scheme, &
+                nm1%sponge_south_width, nm1%sponge_north_width, &
+                nm1%sponge_south_timescale, nm1%sponge_north_timescale, &
+                nm1%slat, nm1%nlat, &
 				mp1%dims,mp1%id, world_process, mp1%rank, mp1%ring_comm)
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
