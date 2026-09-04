@@ -317,8 +317,8 @@
 
 
 		! interpolate to grid, do finite diffs, pass halos, etc
-		dphi=(2._wp*PI) / real(ip-1,wp) ! lon
-		dphin=(2._wp*PI) / real(ip-1,wp) ! lon
+		dphi=(2._wp*PI) / real(ip,wp) ! lon: ip distinct periodic cells
+		dphin=(2._wp*PI) / real(ip,wp) ! lon: ip distinct periodic cells
 
 		! set up longitude array:
 		phi=dphi(1)*(/(i,i=ipstart+1-o_halo-1,ipstart+ipp+o_halo-1)/)
@@ -648,7 +648,7 @@
                     ! remains approximately constant on the lat-lon grid.
                     do j=1,jp
                         lat_global=(slat+(nlat-slat)*real(j-1,wp)/real(jp-1,wp))*PI/180._wp
-                        dx_noise=re*abs(cos(lat_global))*(2._wp*PI/real(ip-1,wp))
+                        dx_noise=re*abs(cos(lat_global))*(2._wp*PI/real(ip,wp))
                         sigma_i=height_noise_corr_length/max(dx_noise,tiny(1._wp))
                         radius_i=min(ip/2,max(1,ceiling(3._wp*sigma_i)))
                         do i=1,ip
