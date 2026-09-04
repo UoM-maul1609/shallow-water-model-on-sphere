@@ -44,12 +44,16 @@
             			dissipate_h, nudge, restart
             integer(i4b) :: initial_winds, ip, jp, subgrid_model, &
                         coriolis_scheme=0_i4b, &
-                        momentum_metric_terms=0_i4b
+                        momentum_metric_terms=0_i4b, &
+                        smagorinsky_scheme=0_i4b, &
+                        height_noise_scheme=0_i4b
             real(wp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &
             			slat, nlat, slat_thresh, nlat_thresh, nudge_timescale, &
-            			u_jet, theta_jet, h_jet, cvis, vis_eq, lat_eq
+            			u_jet, theta_jet, h_jet, cvis, vis_eq, lat_eq, &
+                        height_noise_amplitude=100._wp, &
+                        height_noise_corr_length=5.e5_wp
         end type namelist_input
 
 

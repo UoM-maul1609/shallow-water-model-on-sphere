@@ -59,6 +59,9 @@
 	!>@param[inout] coords - coordinates of cartesian topology
 	!>@param[in] inputfile - netcdf file of saturn winds
 	!>@param[in] add_random_height_noise - add noise to get going
+	!>@param[in] height_noise_scheme - 0 legacy grid-cell noise; 1 correlated physical-scale noise
+	!>@param[in] height_noise_amplitude - RMS height perturbation in metres for scheme 1
+	!>@param[in] height_noise_corr_length - Gaussian correlation sigma in metres for scheme 1
 	!>@param[in] initially_geostrophic - diagnose balanced winds from height after perturbation
 	!>@param[in] momentum_metric_terms - 0 legacy/geostrophic; 1 spherical curvature/gradient-wind
 	!>@param[in] initial_winds - flag: saturn, or jet?
@@ -92,6 +95,7 @@
 				recqdq, &
 				u_nudge, o_halo, ipstart, jpstart, coords, &
 				inputfile, add_random_height_noise, &
+                height_noise_scheme, height_noise_amplitude, height_noise_corr_length, &
 				initially_geostrophic, momentum_metric_terms, initial_winds, &
 				u_jet, theta_jet, h_jet, &
 				ip, jp, &
@@ -123,9 +127,11 @@
 		! namelist variables used to set the grid
 		character (len=*), intent(in) :: inputfile
 		logical, intent(in) :: add_random_height_noise, initially_geostrophic
-		integer(i4b), intent(in) :: initial_winds, ip, jp, momentum_metric_terms
+		integer(i4b), intent(in) :: initial_winds, ip, jp, momentum_metric_terms, &
+                                  height_noise_scheme
 		real(wp), intent(in) :: wind_factor, wind_shift, wind_reduce, runtime, &
 							dt_nm, grav, rho_nm, re_nm, &
+                            height_noise_amplitude, height_noise_corr_length, &
 							rotation_period_hours, scale_height, &
 							slat_thresh, nlat_thresh, &
 							u_jet, theta_jet, h_jet
@@ -138,12 +144,18 @@
 		integer(i4b) :: iloc, error, AllocateStatus, ncid, varid1,varid2, dimid, nlats, &
 						i, j
 		real(wp), dimension(:), allocatable :: latitude, wind
+		real(wp), dimension(:,:), allocatable :: u_base
+        real(wp), dimension(:,:), allocatable :: noise_raw, noise_tmp, noise_corr
 		real(wp) :: var, dummy, delta_omega, slat_thresh2, nlat_thresh2, &
-                    pgrad_y, pgrad_x, kcurv, disc, root1, root2, u_geo, f_eff
+                    pgrad_y, pgrad_x, pgrad_y_base, kcurv, balance_freq, f_eff, &
+                    noise_mean, noise_rms, noise_sum, noise_sumsq, noise_weight, &
+                    sigma_i, sigma_j, dx_noise, dy_noise, wgt, lat_global, &
+                    band_south, band_north
 		! for random number:
 		real(wp) :: r
 		real(wp), dimension(10,10) :: rs
-		integer(i4b) :: k, nbottom, ntop, tag1
+		integer(i4b) :: k, nbottom, ntop, tag1, ii, jj, iii, jjj, &
+                                  radius_i, radius_j, n_noise
 		integer(i4b), allocatable, dimension(:) :: seed
 		
 		
@@ -203,6 +215,8 @@
 		allocate( hs(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
 		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"
 		allocate( u(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
+		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"
+		allocate( u_base(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
 		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"
 		allocate( v(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo), STAT = AllocateStatus)
 		if (AllocateStatus /= 0) STOP "*** Not enough memory ***"
@@ -447,6 +461,7 @@
 		do j=1-o_halo,jpp+o_halo
 			u(:,j)=u_nudge(j)
 		enddo
+		u_base(:,:)=u(:,:)
 		
 		! set surface to zero.
 		hs(:,:)=0._wp
@@ -525,68 +540,184 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! calculate and add noise														 !
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!		
-		call random_seed(size=k)
-		allocate(seed(1:k))
-		seed(:)=2
-		call random_seed(put=seed)
-		select case (initial_winds)
-			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			! saturn winds:                                                              !
-			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			case (1) 
-			do j=1,jp
-				do i=1,ip
-					r=random_normal() ! from the Netlib
+		if (add_random_height_noise) then
+            call random_seed(size=k)
+            allocate(seed(1:k))
+            seed(:)=2
+            call random_seed(put=seed)
 
-					if((i > ipstart) .and. (i <=ipstart+ipp) &
-						.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
-					
-						if ((theta(j-jpstart)*180._wp/PI) > 75._wp &
-							.and. (theta(j-jpstart)*180._wp/PI) < 80._wp) then
-						
-							height(i-ipstart,j-jpstart) = &
-								height(i-ipstart,j-jpstart) + &
-								r*1000.e0_wp*0.6e5_wp/height(i-ipstart,j-jpstart) ! *&
-									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_wp
-						endif
-					endif
+            select case (height_noise_scheme)
+            case (0)
+                ! Legacy behaviour: independent grid-cell Gaussian height noise,
+                ! with the original nominal ~1000 m amplitude expression.
+                select case (initial_winds)
+                case (1)
+                    do j=1,jp
+                        do i=1,ip
+                            r=random_normal()
+                            if((i > ipstart) .and. (i <=ipstart+ipp) &
+                                .and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
+                                if ((theta(j-jpstart)*180._wp/PI) > 75._wp &
+                                    .and. (theta(j-jpstart)*180._wp/PI) < 80._wp) then
+                                    height(i-ipstart,j-jpstart) = &
+                                        height(i-ipstart,j-jpstart) + &
+                                        r*1000.e0_wp*0.6e5_wp/height(i-ipstart,j-jpstart)
+                                endif
+                            endif
+                        enddo
+                    enddo
+                case (2)
+                    do j=1,jp
+                        do i=1,ip
+                            r=random_normal()
+                            if((i > ipstart) .and. (i <=ipstart+ipp) &
+                                .and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
+                                if ((theta(j-jpstart)*180._wp/PI) > (theta_jet-h_jet*3._wp) &
+                                    .and. (theta(j-jpstart)*180._wp/PI) < (theta_jet+h_jet*3._wp)) then
+                                    height(i-ipstart,j-jpstart) = &
+                                        height(i-ipstart,j-jpstart) + &
+                                        r*1000.e0_wp*0.6e5_wp/height(i-ipstart,j-jpstart)
+                                endif
+                            endif
+                        enddo
+                    enddo
+                case default
+                    print *,'error initial_winds',initial_winds
+                    stop
+                end select
 
-				enddo
-			enddo
-			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            case (1)
+                ! Resolution-independent correlated perturbation.  Generate the
+                ! same global Gaussian field on every MPI rank, smooth it with a
+                ! Gaussian kernel whose standard deviation is specified in metres,
+                ! then normalise the perturbation over the active jet band so that
+                ! height_noise_amplitude is its RMS height perturbation in metres.
+                if (height_noise_amplitude < 0._wp) then
+                    write(*,*) 'ERROR: height_noise_amplitude must be >= 0'
+                    stop 1
+                endif
+                if (height_noise_corr_length < 0._wp) then
+                    write(*,*) 'ERROR: height_noise_corr_length must be >= 0'
+                    stop 1
+                endif
 
-			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			! ideal jet:                                                                 !
-			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			case (2) 
-			do j=1,jp
-				do i=1,ip
-					r=random_normal() ! from the Netlib
+                select case (initial_winds)
+                case (1)
+                    band_south=75._wp
+                    band_north=80._wp
+                case (2)
+                    band_south=theta_jet-3._wp*h_jet
+                    band_north=theta_jet+3._wp*h_jet
+                case default
+                    print *,'error initial_winds',initial_winds
+                    stop
+                end select
 
-					if((i > ipstart) .and. (i <=ipstart+ipp) &
-						.and. (j > jpstart) .and. (j <= jpstart+jpp) ) then
-					
-						if ((theta(j-jpstart)*180._wp/PI) > (theta_jet-h_jet*3._wp) &
-						.and. (theta(j-jpstart)*180._wp/PI) <(theta_jet+h_jet*3._wp)) then
-						
-							height(i-ipstart,j-jpstart) = &
-								height(i-ipstart,j-jpstart) + &
-								r*1000.e0_wp*0.6e5_wp/height(i-ipstart,j-jpstart) ! *&
-									!abs(f_cor(i-ipstart,j-jpstart))/3e-4_wp
-						endif
-					endif
+                allocate(noise_raw(1:ip,1:jp), noise_tmp(1:ip,1:jp), &
+                         noise_corr(1:ip,1:jp), STAT=AllocateStatus)
+                if (AllocateStatus /= 0) STOP "*** Not enough memory ***"
 
-				enddo
-			enddo
-			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                do j=1,jp
+                    do i=1,ip
+                        noise_raw(i,j)=random_normal()
+                    enddo
+                enddo
 
-			case default
-				print *,'error initial_winds',initial_winds
-				stop
-		end select
-		
-			
-		deallocate(seed)
+                if (height_noise_corr_length > 0._wp) then
+                    ! Meridional Gaussian smoothing.
+                    dy_noise=re*abs((nlat-slat)*PI/180._wp/real(jp-1,wp))
+                    sigma_j=height_noise_corr_length/max(dy_noise,tiny(1._wp))
+                    radius_j=min(jp-1,max(1,ceiling(3._wp*sigma_j)))
+                    do j=1,jp
+                        do i=1,ip
+                            noise_sum=0._wp
+                            noise_weight=0._wp
+                            do jj=-radius_j,radius_j
+                                jjj=j+jj
+                                if (jjj < 1 .or. jjj > jp) cycle
+                                wgt=exp(-0.5_wp*(real(jj,wp)/sigma_j)**2)
+                                noise_sum=noise_sum+wgt*noise_raw(i,jjj)
+                                noise_weight=noise_weight+wgt
+                            enddo
+                            noise_tmp(i,j)=noise_sum/noise_weight
+                        enddo
+                    enddo
+
+                    ! Zonal Gaussian smoothing.  The number of grid points in the
+                    ! kernel varies with latitude so the physical correlation scale
+                    ! remains approximately constant on the lat-lon grid.
+                    do j=1,jp
+                        lat_global=(slat+(nlat-slat)*real(j-1,wp)/real(jp-1,wp))*PI/180._wp
+                        dx_noise=re*abs(cos(lat_global))*(2._wp*PI/real(ip-1,wp))
+                        sigma_i=height_noise_corr_length/max(dx_noise,tiny(1._wp))
+                        radius_i=min(ip/2,max(1,ceiling(3._wp*sigma_i)))
+                        do i=1,ip
+                            noise_sum=0._wp
+                            noise_weight=0._wp
+                            do ii=-radius_i,radius_i
+                                iii=modulo(i-1+ii,ip)+1
+                                wgt=exp(-0.5_wp*(real(ii,wp)/sigma_i)**2)
+                                noise_sum=noise_sum+wgt*noise_tmp(iii,j)
+                                noise_weight=noise_weight+wgt
+                            enddo
+                            noise_corr(i,j)=noise_sum/noise_weight
+                        enddo
+                    enddo
+                else
+                    noise_corr=noise_raw
+                endif
+
+                ! Remove the band mean and scale to the requested RMS amplitude.
+                noise_sum=0._wp
+                noise_sumsq=0._wp
+                n_noise=0
+                do j=1,jp
+                    lat_global=slat+(nlat-slat)*real(j-1,wp)/real(jp-1,wp)
+                    if (lat_global > band_south .and. lat_global < band_north) then
+                        do i=1,ip
+                            noise_sum=noise_sum+noise_corr(i,j)
+                            noise_sumsq=noise_sumsq+noise_corr(i,j)**2
+                            n_noise=n_noise+1
+                        enddo
+                    endif
+                enddo
+                if (n_noise <= 0) then
+                    write(*,*) 'ERROR: no grid points in height-noise latitude band'
+                    stop 1
+                endif
+                noise_mean=noise_sum/real(n_noise,wp)
+                noise_rms=sqrt(max(0._wp,noise_sumsq/real(n_noise,wp)-noise_mean**2))
+                if (noise_rms <= tiny(1._wp) .and. height_noise_amplitude > 0._wp) then
+                    write(*,*) 'ERROR: correlated height-noise RMS is zero'
+                    stop 1
+                endif
+
+                do j=1,jp
+                    lat_global=slat+(nlat-slat)*real(j-1,wp)/real(jp-1,wp)
+                    if (lat_global > band_south .and. lat_global < band_north) then
+                        if (j > jpstart .and. j <= jpstart+jpp) then
+                            do i=1,ip
+                                if (i > ipstart .and. i <= ipstart+ipp) then
+                                    if (height_noise_amplitude > 0._wp) then
+                                        height(i-ipstart,j-jpstart)=height(i-ipstart,j-jpstart) + &
+                                            height_noise_amplitude* &
+                                            (noise_corr(i,j)-noise_mean)/noise_rms
+                                    endif
+                                endif
+                            enddo
+                        endif
+                    endif
+                enddo
+
+                deallocate(noise_raw,noise_tmp,noise_corr)
+
+            case default
+                write(*,*) 'ERROR: unknown height_noise_scheme = ',height_noise_scheme
+                stop 1
+            end select
+
+            deallocate(seed)
+		endif
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!		
 
 
@@ -616,47 +747,48 @@
                 enddo
 
             case (1)
-                ! Local gradient-wind diagnosis after adding the height
-                ! perturbation.  The meridional pressure gradient gives
-                !   k*u^2 + f*u + P_y = 0,  k=tan(theta)/re.
-                ! Choose the root continuous with the geostrophic solution.
+                ! The zonally symmetric base jet and height field are already in
+                ! exact gradient-wind balance.  After adding an arbitrary 2-D
+                ! height perturbation, an exact local nonlinear gradient-wind
+                ! inversion is not guaranteed to have a real solution.  Diagnose
+                ! the perturbation winds from the balance linearised about the
+                ! known base jet U:
+                !
+                !   (f + 2*k*U) u' + P'_y = 0,   k=tan(theta)/re
+                !   (f +   k*U) v'       = P'_x
+                !
+                ! where P'_y is the total meridional pressure-gradient
+                ! acceleration minus that of the gradient-wind-balanced base state.
                 do j=1,jpp
                     kcurv=tan(theta(j))/re
                     do i=1-o_halo,ipp+o_halo
                         pgrad_y=g*(height(i,j+1)-height(i,j-1)) / &
                                 (re*(dtheta(j)+dtheta(j-1)))
-                        u_geo=-pgrad_y/f_cor(i,j)
-
-                        if (abs(kcurv) < 100._wp*tiny(1._wp)) then
-                            u(i,j)=u_geo
-                        else
-                            disc=f_cor(i,j)**2-4._wp*kcurv*pgrad_y
-                            if (disc < 0._wp) then
-                                write(*,*) 'ERROR: no real gradient-wind solution'
-                                write(*,*) ' i,j,theta(deg),disc = ', &
-                                    i,j,theta(j)*180._wp/pi,disc
-                                stop 1
-                            endif
-                            root1=(-f_cor(i,j)+sqrt(disc))/(2._wp*kcurv)
-                            root2=(-f_cor(i,j)-sqrt(disc))/(2._wp*kcurv)
-                            if (abs(root1-u_geo) <= abs(root2-u_geo)) then
-                                u(i,j)=root1
-                            else
-                                u(i,j)=root2
-                            endif
+                        pgrad_y_base=-f_cor(i,j)*u_base(i,j) - &
+                                     kcurv*u_base(i,j)**2
+                        balance_freq=f_cor(i,j)+2._wp*kcurv*u_base(i,j)
+                        if (abs(balance_freq) <= tiny(1._wp)) then
+                            write(*,*) 'ERROR: zero linear gradient-wind frequency'
+                            write(*,*) ' i,j,theta(deg),frequency = ', &
+                                i,j,theta(j)*180._wp/pi,balance_freq
+                            stop 1
                         endif
+                        u(i,j)=u_base(i,j) - &
+                               (pgrad_y-pgrad_y_base)/balance_freq
                     enddo
                 enddo
 
-                ! The zonal pressure-gradient balance is modified by the
-                ! same curvature frequency: (f + u*tan(theta)/re)*v = P_x.
+                ! The base height has no zonal gradient, so P_x is entirely the
+                ! perturbation pressure gradient.  Linearised zonal momentum
+                ! balance gives (f + k*U) v' = P'_x.
                 do j=1,jpp
+                    kcurv=tan(theta(j))/re
                     do i=1,ipp
                         pgrad_x=g*(height(i+1,j)-height(i-1,j)) / &
                                 (re*(dphi(i)+dphi(i-1))*cos(theta(j)))
-                        f_eff=f_cor(i,j)+u(i,j)*tan(theta(j))/re
+                        f_eff=f_cor(i,j)+kcurv*u_base(i,j)
                         if (abs(f_eff) <= tiny(1._wp)) then
-                            write(*,*) 'ERROR: zero effective Coriolis in gradient-wind initialisation'
+                            write(*,*) 'ERROR: zero effective Coriolis in linear gradient-wind initialisation'
                             write(*,*) ' i,j,theta(deg),f_eff = ', &
                                 i,j,theta(j)*180._wp/pi,f_eff
                             stop 1

@@ -68,7 +68,7 @@
 				ipstart, jpstart, coords, &
 				new_file,outputfile, output_interval, nudge, nudge_tau, &
 				subgrid_model, viscous_dissipation, dissipate_h,vis, cvis, &
-				vis_eq, lat_eq, coriolis_scheme, momentum_metric_terms, &
+				vis_eq, lat_eq, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme, &
 				dims,id, world_process, rank, ring_comm)
 		use numerics_type
 		use mpi_module
@@ -78,7 +78,7 @@
 		logical, intent(inout) :: new_file
 		logical, intent(in) :: nudge, viscous_dissipation, dissipate_h
 		integer(i4b), intent(in) :: ip,ipp, jp,jpp, ntim, o_halo, ipstart, jpstart, &
-									subgrid_model, coriolis_scheme, momentum_metric_terms
+									subgrid_model, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme
 		integer(i4b), intent(in) :: id, world_process, ring_comm, rank
 		integer(i4b), dimension(2), intent(in) :: coords, dims
 		character (len=*), intent(in) :: outputfile
@@ -100,8 +100,10 @@
 		integer(i4b) :: n, cur=1, j, error, rank2
 		real(wp) :: time, time_last_output, output_time
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
-				u_old, v_old, h_old
-		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco
+				u_old, v_old, h_old, u_sgs, v_sgs, h_sgs, &
+                tau_uu, tau_uv, tau_vv
+		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco, &
+                sgs_mom_u, sgs_mom_v, mom_u_tmp, mom_v_tmp
 		
 
 		time_last_output=-output_interval
@@ -204,52 +206,94 @@
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-				
-				
-				
-				
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				! dissipate u                                                            !
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(u_old+u), delsq,re,&
-					theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
-					recq, cq_s, dp1, dq)
-										
 				select case(subgrid_model)
 				case (1)
-					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*vis			
-				case (2)
-					call smagorinsky(ipp,jpp,o_halo,cvis,0.5_wp*(u_old+u),&
-									0.5_wp*(v_old+v),visco,re,recq, dp1, dq)
-					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*visco			
-				case default
-					print *,'error subgrid ',subgrid_model
-				end select
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+					! Legacy constant scalar viscosity.
+					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(u_old+u), delsq,re,&
+						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
+						recq, cq_s, dp1, dq)
+					u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*vis
 
-
-
-
-				
-
-
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				! dissipate v                                                            !
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(v_old+v), delsq,re,&
-					theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
-					recq, cq_s, dp1, dq)
-								
-				select case(subgrid_model)
-				case (1)
+					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(v_old+v), delsq,re,&
+						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
+						recq, cq_s, dp1, dq)
 					v(1:ipp,1:jpp)=v(1:ipp,1:jpp)+dt*delsq*vis
+
 				case (2)
-					v(1:ipp,1:jpp)=v(1:ipp,1:jpp)+dt*delsq*visco			
+					select case (smagorinsky_scheme)
+					case (0)
+						! Legacy Smagorinsky: scalar Laplacian of u and v.
+						call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(u_old+u), delsq,re,&
+							theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
+							recq, cq_s, dp1, dq)
+						call smagorinsky(ipp,jpp,o_halo,cvis,0.5_wp*(u_old+u),&
+							0.5_wp*(v_old+v),visco,re,recq, dp1, dq)
+						u(1:ipp,1:jpp)=u(1:ipp,1:jpp)+dt*delsq*visco
+
+						call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(v_old+v), delsq,re,&
+							theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
+							recq, cq_s, dp1, dq)
+						v(1:ipp,1:jpp)=v(1:ipp,1:jpp)+dt*delsq*visco
+
+					case (1)
+						! Spherical, thickness-weighted, conservative SGS stress.
+						! Evaluate h, u, v at the old/new midpoint, matching the
+						! time-centred treatment used by the legacy viscosity.
+						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
+						u_sgs = 0.5_wp*(u_old+u)
+						v_sgs = 0.5_wp*(v_old+v)
+						h_sgs = 0.5_wp*(h_old+h)
+
+						call smagorinsky_spherical_stress(ipp,jpp,o_halo,cvis,h_sgs,u_sgs,v_sgs,&
+							tau_uu,tau_uv,tau_vv,visco,re,theta,recq,dp1,dq)
+
+						! Exchange the SGS stresses.  At the physical latitude edges
+						! use a zero-normal-SGS-stress boundary condition: making the
+						! ghost stress the negative of the adjacent cell makes the
+						! face-centred stress exactly zero.
+						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, tau_uu)
+						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, tau_uv)
+						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, tau_vv)
+						if (coords(2) == 0) then
+							tau_uu(1:ipp,0) = -tau_uu(1:ipp,1)
+							tau_uv(1:ipp,0) = -tau_uv(1:ipp,1)
+							tau_vv(1:ipp,0) = -tau_vv(1:ipp,1)
+						endif
+						if (coords(2) == dims(2)-1) then
+							tau_uu(1:ipp,jpp+1) = -tau_uu(1:ipp,jpp)
+							tau_uv(1:ipp,jpp+1) = -tau_uv(1:ipp,jpp)
+							tau_vv(1:ipp,jpp+1) = -tau_vv(1:ipp,jpp)
+						endif
+
+						call spherical_stress_divergence(ipp,jpp,o_halo,tau_uu,tau_uv,tau_vv,&
+							sgs_mom_u,sgs_mom_v,re,theta,thetan,recq,cq,cq_s,dp1,dq)
+
+						! Apply the SGS term to conservative momenta.  h itself is
+						! not diffused by this closure.
+						mom_u_tmp = h(1:ipp,1:jpp)*u(1:ipp,1:jpp) + dt*sgs_mom_u
+						mom_v_tmp = h(1:ipp,1:jpp)*v(1:ipp,1:jpp) + dt*sgs_mom_v
+						u(1:ipp,1:jpp) = mom_u_tmp/h(1:ipp,1:jpp)
+						v(1:ipp,1:jpp) = mom_v_tmp/h(1:ipp,1:jpp)
+
+					case default
+						write(*,*) 'ERROR: unknown smagorinsky_scheme = ', smagorinsky_scheme
+						write(*,*) '       valid values are 0 (legacy) and 1 (spherical stress)'
+						stop 1
+					end select
+
 				case default
 					print *,'error subgrid ',subgrid_model
 				end select
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+				! Existing extra equatorial v viscosity.  In the new SGS path
+				! delsq has not otherwise been evaluated for v, so do it here.
+				if ((subgrid_model == 2) .and. (smagorinsky_scheme == 1) .and. &
+					(abs(vis_eq) > tiny(1._wp))) then
+					call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
+					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(v_old+v), delsq,re,&
+						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
+						recq, cq_s, dp1, dq)
+				endif
 
 				do j=1,jpp
 					if((theta(j) >-lat_eq*pi/180._wp) .and. &
@@ -260,34 +304,19 @@
 					endif
 				enddo
 
-				
-					
-							
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				! dissipate h                                                            !
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				! Preserve the existing optional h diffusion for the constant-
+				! viscosity model only.  The conservative Smagorinsky closure
+				! acts on momentum, not layer thickness.
 				if (dissipate_h .and. (subgrid_model == 1)) then
-					!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-					! halo exchanges                                                     !
-					!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 					call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
-					!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 					call dissipation(ipp,jpp,o_halo,dt,0.5_wp*(h_old+h), delsq,re,&
 						theta,thetan,dtheta,dthetan, phi, phin, dphi, dphin, &
 						recq, cq_s, dp1, dq)
-						
-						
 					h(1:ipp,1:jpp)=h(1:ipp,1:jpp)+dt*delsq*vis
 				endif
-				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-
-
-			endif	    		
+			endif	    	
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
 
 
 

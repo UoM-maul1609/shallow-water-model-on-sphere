@@ -5,7 +5,8 @@
     module advection
     use numerics_type
     private
-    public :: lax_wendroff_sphere, lax_wendroff_ll, dissipation, smagorinsky
+    public :: lax_wendroff_sphere, lax_wendroff_ll, dissipation, smagorinsky, &
+              smagorinsky_spherical_stress, spherical_stress_divergence
     contains
 	!>@author
 	!>Paul J. Connolly, The University of Manchester
@@ -515,5 +516,130 @@
 			)**2._wp )
 
 	end subroutine smagorinsky
+
+
+	!>@author
+	!>Paul J. Connolly / spherical SGS update
+	!>@brief
+	!>Construct a thickness-weighted spherical Smagorinsky stress tensor.
+	!>
+	!>The physical east/north strain components are
+	!>  S_ee = (1/(a cos(theta))) du/dlambda - v tan(theta)/a
+	!>  S_nn = (1/a) dv/dtheta
+	!>  S_en = 0.5[(1/a) du/dtheta + (1/(a cos(theta))) dv/dlambda
+	!>                 + u tan(theta)/a].
+	!>Only the deviatoric part is used in the SGS stress, so resolved
+	!>horizontal divergence is not treated as a bulk-viscous deformation.
+	!>The stress is tau_ij = 2 h nu_t S'_ij, with
+	!>nu_t = cvis^2 Delta_x Delta_y |S'| and |S'|=sqrt(2 S':S').
+    subroutine smagorinsky_spherical_stress(ip,jp,o_halo,cvis,h,u,v,&
+            tau_uu,tau_uv,tau_vv,vis,re,theta,recq,dp1,dq)
+
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        real(wp), intent(in) :: cvis, re
+        real(wp), dimension(1-o_halo:jp+o_halo), intent(in) :: theta
+        real(wp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
+                h,u,v,recq,dp1,dq
+        real(wp), intent(inout), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
+                tau_uu,tau_uv,tau_vv
+        real(wp), intent(inout), dimension(1:ip,1:jp) :: vis
+
+        real(wp), dimension(1:ip) :: dudx,dvdy,dudy,dvdx, &
+                see,snn,sen,sdev_ee,sdev_nn,strain_mag
+        real(wp) :: metric_curv
+        integer(i4b) :: j
+
+        ! Initialise halos too: MPI exchange fills internal-neighbour halos;
+        ! physical latitude halos are set explicitly in the driver.
+        tau_uu = 0._wp
+        tau_uv = 0._wp
+        tau_vv = 0._wp
+        vis = 0._wp
+
+        do j=1,jp
+            dudx = (u(2:ip+1,j)-u(0:ip-1,j)) / &
+                    (recq(1:ip,j)*(dp1(1:ip,j)+dp1(0:ip-1,j)))
+            dvdx = (v(2:ip+1,j)-v(0:ip-1,j)) / &
+                    (recq(1:ip,j)*(dp1(1:ip,j)+dp1(0:ip-1,j)))
+            dudy = (u(1:ip,j+1)-u(1:ip,j-1)) / &
+                    (re*(dq(1:ip,j)+dq(1:ip,j-1)))
+            dvdy = (v(1:ip,j+1)-v(1:ip,j-1)) / &
+                    (re*(dq(1:ip,j)+dq(1:ip,j-1)))
+
+            metric_curv = tan(theta(j))/re
+            see = dudx - v(1:ip,j)*metric_curv
+            snn = dvdy
+            sen = 0.5_wp*(dudy + dvdx + u(1:ip,j)*metric_curv)
+
+            ! In two horizontal dimensions, removing half the trace gives
+            ! S'_ee = (S_ee-S_nn)/2 and S'_nn=-S'_ee.
+            sdev_ee = 0.5_wp*(see-snn)
+            sdev_nn = -sdev_ee
+            strain_mag = sqrt(2._wp*sdev_ee**2 + 2._wp*sdev_nn**2 + &
+                              4._wp*sen**2)
+
+            ! Delta^2 = Delta_x Delta_y on the local spherical grid.
+            vis(1:ip,j) = cvis**2 * re*recq(1:ip,j)*dp1(1:ip,j)*dq(1:ip,j) * &
+                          strain_mag
+
+            tau_uu(1:ip,j) = 2._wp*h(1:ip,j)*vis(1:ip,j)*sdev_ee
+            tau_vv(1:ip,j) = 2._wp*h(1:ip,j)*vis(1:ip,j)*sdev_nn
+            tau_uv(1:ip,j) = 2._wp*h(1:ip,j)*vis(1:ip,j)*sen
+        enddo
+
+    end subroutine smagorinsky_spherical_stress
+
+
+	!>@brief
+	!>Spherical divergence of a symmetric horizontal SGS stress tensor.
+	!>Returns tendencies of conservative momenta hu and hv.  Written in a
+	!>face-flux form for the derivative pieces, with the required spherical
+	!>tensor metric term retained in the northward component.
+    subroutine spherical_stress_divergence(ip,jp,o_halo,tau_uu,tau_uv,tau_vv,&
+            tend_u,tend_v,re,theta,thetan,recq,cq,cq_s,dp1,dq)
+
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        real(wp), intent(in) :: re
+        real(wp), dimension(1-o_halo:jp+o_halo), intent(in) :: theta,thetan
+        real(wp), intent(in), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo) :: &
+                tau_uu,tau_uv,tau_vv,recq,cq,cq_s,dp1,dq
+        real(wp), intent(out), dimension(1:ip,1:jp) :: tend_u,tend_v
+
+        real(wp), dimension(1:ip) :: uu_e,uu_w,uv_e,uv_w, &
+                uv_n,uv_s,vv_n,vv_s
+        integer(i4b) :: j
+
+        do j=1,jp
+            ! Arithmetic face stresses give a centred, conservative flux
+            ! difference while requiring only the model's existing one-cell halo.
+            uu_e = 0.5_wp*(tau_uu(1:ip,j)+tau_uu(2:ip+1,j))
+            uu_w = 0.5_wp*(tau_uu(0:ip-1,j)+tau_uu(1:ip,j))
+            uv_e = 0.5_wp*(tau_uv(1:ip,j)+tau_uv(2:ip+1,j))
+            uv_w = 0.5_wp*(tau_uv(0:ip-1,j)+tau_uv(1:ip,j))
+            uv_n = 0.5_wp*(tau_uv(1:ip,j)+tau_uv(1:ip,j+1))
+            uv_s = 0.5_wp*(tau_uv(1:ip,j-1)+tau_uv(1:ip,j))
+            vv_n = 0.5_wp*(tau_vv(1:ip,j)+tau_vv(1:ip,j+1))
+            vv_s = 0.5_wp*(tau_vv(1:ip,j-1)+tau_vv(1:ip,j))
+
+            ! (div tau)_east = 1/(a cos phi) d tau_ee/dlambda
+            !                + 1/(a cos^2 phi) d(tau_en cos^2 phi)/dphi
+            tend_u(1:ip,j) = (uu_e-uu_w)/(recq(1:ip,j)*dp1(1:ip,j)) + &
+                (uv_n*cq_s(1:ip,j)**2 - uv_s*cq_s(1:ip,j-1)**2) / &
+                (re*cq(1:ip,j)**2*dq(1:ip,j))
+
+            ! (div tau)_north = 1/(a cos phi) d tau_en/dlambda
+            !                 + 1/(a cos phi) d(tau_nn cos phi)/dphi
+            !                 + tau_ee tan(phi)/a
+            tend_v(1:ip,j) = (uv_e-uv_w)/(recq(1:ip,j)*dp1(1:ip,j)) + &
+                (vv_n*cq_s(1:ip,j) - vv_s*cq_s(1:ip,j-1)) / &
+                (re*cq(1:ip,j)*dq(1:ip,j)) + &
+                tau_uu(1:ip,j)*tan(theta(j))/re
+        enddo
+
+    end subroutine spherical_stress_divergence
 
 	end module advection
