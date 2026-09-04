@@ -66,7 +66,7 @@
     			recq, cq_s, cq, dp1, dq,recqdq, &
 			    u_nudge,o_halo, &
 				ipstart, jpstart, coords, &
-				new_file,outputfile, output_interval, nudge, nudge_tau, &
+				new_file,outputfile, output_interval, nudge, nudge_tau, nudge_scheme, &
 				subgrid_model, viscous_dissipation, dissipate_h,vis, cvis, &
 				vis_eq, lat_eq, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme, &
                 lat_boundary_scheme, sponge_south_width, sponge_north_width, &
@@ -74,6 +74,7 @@
 				dims,id, world_process, rank, ring_comm)
 		use numerics_type
 		use mpi_module
+        use mpi
 		use advection
 
 		implicit none
@@ -81,7 +82,7 @@
 		logical, intent(in) :: nudge, viscous_dissipation, dissipate_h
 		integer(i4b), intent(in) :: ip,ipp, jp,jpp, ntim, o_halo, ipstart, jpstart, &
 									subgrid_model, coriolis_scheme, momentum_metric_terms, smagorinsky_scheme, &
-                                    lat_boundary_scheme
+                                    lat_boundary_scheme, nudge_scheme
 		integer(i4b), intent(in) :: id, world_process, ring_comm, rank
 		integer(i4b), dimension(2), intent(in) :: coords, dims
 		character (len=*), intent(in) :: outputfile
@@ -102,7 +103,7 @@
                             sponge_south_timescale, sponge_north_timescale, slat, nlat
 					
 		! locals:		
-		integer(i4b) :: n, cur=1, j, error, rank2
+		integer(i4b) :: n, cur=1, j, error, rank2, zonal_comm
         logical :: south_wall, north_wall
 		real(wp) :: time, time_last_output, output_time
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
@@ -111,6 +112,8 @@
 		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco, &
                 sgs_mom_u, sgs_mom_v, mom_u_tmp, mom_v_tmp, &
                 h_sponge_ref, u_sponge_ref, v_sponge_ref
+		real(wp), dimension(1:jpp) :: u_mid_sum_local, u_mid_sum_global
+        real(wp) :: ubar_mid, nudge_increment
 		
 
 		time_last_output=-output_interval
@@ -164,6 +167,10 @@
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		! time-loop                                                                      !
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! Longitude-only communicator for nudge_scheme=1.  It contains all
+        ! longitude tiles belonging to the same latitude band.
+        call MPI_CART_SUB(ring_comm, [.true.,.false.], zonal_comm, error)
+
 		do n=1,ntim	
 		
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -218,29 +225,35 @@
 			! nudge                                                                      !
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			if (nudge) then
-				do j=1,jpp
-					! mid-point rule:
-					u(1:ipp,j)=u(1:ipp,j)+ &
-						(u_nudge(j)- &
-						(0.5_wp*(u(1:ipp,j)+u_old(1:ipp,j)))/real(1,wp) ) &
-						/nudge_tau * dt
-! 					v(1:ipp,j)=v(1:ipp,j)+&
-! 						(0._wp- &
-! 						sum(0.5_wp*(v(1:ipp,j)+v_old(1:ipp,j)))/real(ipp,wp) ) &
-! 						/nudge_tau *dt
+                select case (nudge_scheme)
+                case (0)
+                    ! Legacy/default: nudge every longitude independently.
+                    do j=1,jpp
+                        u(1:ipp,j)=u(1:ipp,j)+ &
+                            (u_nudge(j)- &
+                            (0.5_wp*(u(1:ipp,j)+u_old(1:ipp,j)))/real(1,wp) ) &
+                            /nudge_tau * dt
+                    enddo
 
-! 					Derived by integrating du/dt=(u_nudge-u)/tau
-! 					u(1:ipp,j)=u_nudge(j)- &
-! 						(u_nudge(j)- &
-! 						(u(1:ipp,j))/real(1,wp) ) * &
-! 						exp(-dt/nudge_tau )
-! 					v(1:ipp,j)=0._wp- &
-! 						(0._wp- &
-! 						(v(1:ipp,j))/real(1,wp) ) * &
-! 						exp(-dt/nudge_tau )
-					
-				enddo
-			endif
+                case (1)
+                    ! Nudge only the global zonal mean.  The same increment is
+                    ! applied at every longitude, so u-ubar is not directly damped.
+                    do j=1,jpp
+                        u_mid_sum_local(j)=sum(0.5_wp*(u(1:ipp,j)+u_old(1:ipp,j)))
+                    enddo
+                    call MPI_Allreduce(u_mid_sum_local, u_mid_sum_global, jpp, &
+                        MPIREAL, MPI_SUM, zonal_comm, error)
+                    do j=1,jpp
+                        ubar_mid=u_mid_sum_global(j)/real(ip,wp)
+                        nudge_increment=(u_nudge(j)-ubar_mid)/nudge_tau*dt
+                        u(1:ipp,j)=u(1:ipp,j)+nudge_increment
+                    enddo
+
+                case default
+                    if (id == world_process) print *, 'ERROR: unknown nudge_scheme = ', nudge_scheme
+                    stop 1
+                end select
+            endif
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -429,6 +442,8 @@
 
 
 		
+        call MPI_Comm_free(zonal_comm,error)
+
 	end subroutine model_driver
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	

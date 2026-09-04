@@ -47,7 +47,8 @@
                         momentum_metric_terms=0_i4b, &
                         smagorinsky_scheme=0_i4b, &
                         height_noise_scheme=0_i4b, &
-                        lat_boundary_scheme=0_i4b
+                        lat_boundary_scheme=0_i4b, &
+                        nudge_scheme=0_i4b
             real(wp) :: wind_factor, wind_shift, wind_reduce, vis, &
             			runtime, dt, output_interval, &
             			grav, rho, Re, rotation_period_hours, scale_height, &

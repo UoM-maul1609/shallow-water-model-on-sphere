@@ -181,7 +181,7 @@
 				grid1%u_nudge,grid1%o_halo, &
 				grid1%ipstart, grid1%jpstart, grid1%coords, &
 				io1%new_file, nm1%outputfile, nm1%output_interval, &
-				nm1%nudge,nm1%nudge_timescale, &
+				nm1%nudge,nm1%nudge_timescale,nm1%nudge_scheme, &
 				nm1%subgrid_model, nm1%viscous_dissipation, &
 				nm1%dissipate_h,nm1%vis,nm1%cvis, &
 				nm1%vis_eq,nm1%lat_eq, nm1%coriolis_scheme, nm1%momentum_metric_terms, &

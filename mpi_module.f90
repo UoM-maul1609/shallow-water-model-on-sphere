@@ -14,7 +14,7 @@
 		integer(i4b), parameter :: MPIREAL=MPI_REAL8
 #endif
     private
-    public :: mpi_define, block_ring, exchange_halos
+    public :: mpi_define, block_ring, exchange_halos, MPIREAL
     
 	contains
 	

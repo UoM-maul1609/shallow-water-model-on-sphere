@@ -23,7 +23,8 @@
 	nm1%theta_jet=77., ! latitude of jet
 	nm1%h_jet=1.15, ! standard deviation of jet (width)
 	nm1%nudge=.true.,
-	nm1%nudge_timescale=6.e5, ! default 6e5 seconds
+	nm1%nudge_scheme=1, ! 0=legacy/default, 1=nudge global zonal-mean u only
+	nm1%nudge_timescale=1.7e6, ! default 6.e5 seconds (about 7 days) (1.728e6=20 days)
 	nm1%restart=.false.,
 	nm1%wind_factor=1.0,
 	nm1%wind_shift=0.0,
@@ -37,10 +38,12 @@
 	nm1%output_interval=57600.,
 	nm1%grav=10.44,		! gravity
 	nm1%rho=0.19,		! density
-	nm1%Re=5.4155760e7, ! radius of planet - saturn: 5.8232e7, 0.93 is 5.4155760e7
+	nm1%Re=5.45e7, ! radius of Saturn at around 77 N
 !	nm1%rotation_period_hours=10.55,
 	nm1%rotation_period_hours=10.6564,
-	nm1%scale_height=60e3, ! scale-height of saturn's atmosphere
+	nm1%scale_height=20.e3, ! scale-height of saturn's atmosphere (m)
+						! it's actuall SW equivalent depth, not literal scale height
+						! so might need to try 10,20,40, 60km
 	nm1%ip=400,
 	nm1%jp=240,
 	nm1%slat=-90.,
