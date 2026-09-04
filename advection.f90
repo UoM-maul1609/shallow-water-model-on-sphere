@@ -329,7 +329,7 @@
 		! continuity:
 		h_new = h(1:ip,1:jp) &
 		  - (dt/(recqdp(0:ip-1,1:jp)))*(uh_mid_xt(1:ip,1:jp)-uh_mid_xt(0:ip-1,1:jp)) &
-		  - (dt/(recqdq(1:ip,0:jp-1))) * &
+		  - (dt/(recqdq(1:ip,1:jp))) * &
 		  (vh_mid_yt(1:ip,1:jp)*cq_s(1:ip,1:jp)-vh_mid_yt(1:ip,0:jp-1)*cq_s(1:ip,0:jp-1))
 
 
@@ -338,7 +338,7 @@
 		Uy_mid_yt = uh_mid_yt*vh_mid_yt/h_mid_yt*cq_s(1:ip,0:jp)
 		uh_new = uh(1:ip,1:jp) &
 		  - (dt/(recqdp(0:ip-1,1:jp)))*  (Ux_mid_xt(1:ip,1:jp)-Ux_mid_xt(0:ip-1,1:jp)) &
-		  - (dt/(recqdq(1:ip,0:jp-1)))*(Uy_mid_yt(1:ip,1:jp)-Uy_mid_yt(1:ip,0:jp-1))
+		  - (dt/(recqdq(1:ip,1:jp)))*(Uy_mid_yt(1:ip,1:jp)-Uy_mid_yt(1:ip,0:jp-1))
 
 
 		! v-momentum equation:
@@ -347,7 +347,7 @@
 		Vy_mid_yt2 = 0.5_wp*g*h_mid_yt**2
 		vh_new = vh(1:ip,1:jp) &
 		  - (dt/(recqdp(0:ip-1,1:jp)))*(Vx_mid_xt(1:ip,1:jp)-Vx_mid_xt(0:ip-1,1:jp)) &
-		  - (dt/(recqdq(1:ip,0:jp-1)))*(Vy_mid_yt(1:ip,1:jp)-Vy_mid_yt(1:ip,0:jp-1)) &
+		  - (dt/(recqdq(1:ip,1:jp)))*(Vy_mid_yt(1:ip,1:jp)-Vy_mid_yt(1:ip,0:jp-1)) &
 		  - (dt/(redq(1:ip,0:jp-1) ))* &
 		  (Vy_mid_yt2(1:ip,1:jp)-Vy_mid_yt2(1:ip,0:jp-1))
 

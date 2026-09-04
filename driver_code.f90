@@ -107,7 +107,7 @@
 		real(wp) :: time, time_last_output, output_time
 		real(wp), dimension(1-o_halo:ipp+o_halo,1-o_halo:jpp+o_halo) :: &
 				u_old, v_old, h_old, u_sgs, v_sgs, h_sgs, &
-                tau_uu, tau_uv, tau_vv
+                tau_uu, tau_uv, tau_vv, u_bc_ref, eta_bc_ref
 		real(wp), dimension(1:ipp,1:jpp) :: delsq, vort, visco, &
                 sgs_mom_u, sgs_mom_v, mom_u_tmp, mom_v_tmp, &
                 h_sponge_ref, u_sponge_ref, v_sponge_ref
@@ -151,8 +151,14 @@
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
             call exchange_halos(ring_comm, id, ipp, jpp, o_halo, hs)
+            ! Construct the balanced wall once at t=0, then freeze that
+            ! background continuation as the reference state. Subsequent
+            ! timesteps reflect perturbations about this reference rather than
+            ! recomputing an instantaneous gradient-wind slope from evolving u.
             call apply_balanced_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v,theta,f_cor, &
                 re,g,momentum_metric_terms,coords,dims)
+            u_bc_ref = u
+            eta_bc_ref = h + hs
         endif
 
 		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -251,7 +257,7 @@
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
 				call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
                 if (lat_boundary_scheme == 1) then
-                    call apply_vector_free_slip_lat_halos(ipp,jpp,o_halo,u,v,coords,dims)
+                    call apply_reference_vector_free_slip_lat_halos(ipp,jpp,o_halo,u,v,u_bc_ref,coords,dims)
                 endif
 				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -290,7 +296,7 @@
 						! time-centred treatment used by the legacy viscosity.
 						call exchange_halos(ring_comm, id, ipp, jpp, o_halo, h)
                         if (lat_boundary_scheme == 1) then
-                            call apply_even_lat_halos(ipp,jpp,o_halo,h,coords,dims)
+                            call apply_reference_height_lat_halos(ipp,jpp,o_halo,h,hs,eta_bc_ref,coords,dims)
                         endif
 						u_sgs = 0.5_wp*(u_old+u)
 						v_sgs = 0.5_wp*(v_old+v)
@@ -391,8 +397,8 @@
 			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, u)
 			call exchange_halos(ring_comm, id, ipp, jpp, o_halo, v)
             if (lat_boundary_scheme == 1) then
-                call apply_balanced_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v,theta,f_cor, &
-                    re,g,momentum_metric_terms,coords,dims)
+                call apply_reference_free_slip_lat_halos(ipp,jpp,o_halo,h,hs,u,v, &
+                    u_bc_ref,eta_bc_ref,coords,dims)
             endif
 			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			
@@ -497,6 +503,89 @@
             enddo
         endif
     end subroutine apply_balanced_free_slip_lat_halos
+
+    ! Reference-state free-slip latitude ghosts.  The initial balanced
+    ! background continuation is kept fixed, while perturbations of tangential
+    ! velocity and free-surface height are reflected evenly.  Normal velocity
+    ! is reflected oddly.  This avoids imposing instantaneous gradient-wind
+    ! balance on evolving disturbances at a rigid wall.
+    subroutine apply_reference_free_slip_lat_halos(ip,jp,o_halo,h,hs,u,v, &
+                                                    u_ref,eta_ref,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(in) :: &
+            u_ref,eta_ref
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: &
+            h,hs,u,v
+        integer(i4b) :: k,ji,jg
+
+        if (coords(2) == 0) then
+            do k=1,o_halo
+                ji=k
+                jg=1-k
+                u(:,jg)=u_ref(:,jg) + (u(:,ji)-u_ref(:,ji))
+                v(:,jg)=-v(:,ji)
+                h(:,jg)=eta_ref(:,jg) + ((h(:,ji)+hs(:,ji))-eta_ref(:,ji)) - hs(:,jg)
+            enddo
+        endif
+        if (coords(2) == dims(2)-1) then
+            do k=1,o_halo
+                ji=jp+1-k
+                jg=jp+k
+                u(:,jg)=u_ref(:,jg) + (u(:,ji)-u_ref(:,ji))
+                v(:,jg)=-v(:,ji)
+                h(:,jg)=eta_ref(:,jg) + ((h(:,ji)+hs(:,ji))-eta_ref(:,ji)) - hs(:,jg)
+            enddo
+        endif
+    end subroutine apply_reference_free_slip_lat_halos
+
+    subroutine apply_reference_vector_free_slip_lat_halos(ip,jp,o_halo,u,v,u_ref,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(in) :: u_ref
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: u,v
+        integer(i4b) :: k,ji,jg
+        if (coords(2) == 0) then
+            do k=1,o_halo
+                ji=k; jg=1-k
+                u(:,jg)=u_ref(:,jg) + (u(:,ji)-u_ref(:,ji))
+                v(:,jg)=-v(:,ji)
+            enddo
+        endif
+        if (coords(2) == dims(2)-1) then
+            do k=1,o_halo
+                ji=jp+1-k; jg=jp+k
+                u(:,jg)=u_ref(:,jg) + (u(:,ji)-u_ref(:,ji))
+                v(:,jg)=-v(:,ji)
+            enddo
+        endif
+    end subroutine apply_reference_vector_free_slip_lat_halos
+
+    subroutine apply_reference_height_lat_halos(ip,jp,o_halo,h,hs,eta_ref,coords,dims)
+        use numerics_type
+        implicit none
+        integer(i4b), intent(in) :: ip,jp,o_halo
+        integer(i4b), dimension(2), intent(in) :: coords,dims
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(in) :: hs,eta_ref
+        real(wp), dimension(1-o_halo:ip+o_halo,1-o_halo:jp+o_halo), intent(inout) :: h
+        integer(i4b) :: k,ji,jg
+        if (coords(2) == 0) then
+            do k=1,o_halo
+                ji=k; jg=1-k
+                h(:,jg)=eta_ref(:,jg) + ((h(:,ji)+hs(:,ji))-eta_ref(:,ji)) - hs(:,jg)
+            enddo
+        endif
+        if (coords(2) == dims(2)-1) then
+            do k=1,o_halo
+                ji=jp+1-k; jg=jp+k
+                h(:,jg)=eta_ref(:,jg) + ((h(:,ji)+hs(:,ji))-eta_ref(:,ji)) - hs(:,jg)
+            enddo
+        endif
+    end subroutine apply_reference_height_lat_halos
 
     subroutine apply_vector_free_slip_lat_halos(ip,jp,o_halo,u,v,coords,dims)
         use numerics_type
