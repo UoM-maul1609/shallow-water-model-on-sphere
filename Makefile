@@ -1,11 +1,23 @@
 OSNF_DIR = osnf
 
-.PHONY: osnf cleanall
+.PHONY: osnf cleanall legacy production debug
 CLEANDIRS = $(OSNF_DIR) ./
 
 
-DEBUG = -fbounds-check -g 
-OPT    =-O3
+# Build mode: legacy (default), production, or debug.
+# Override on the command line, e.g. `make BUILD=production`.
+BUILD ?= legacy
+
+ifeq ($(BUILD),production)
+  BUILD_FLAGS = -O3 #-march=native
+else ifeq ($(BUILD),debug)
+  BUILD_FLAGS = -O0 -g -fbounds-check -fbacktrace -ffpe-trap=invalid,zero,overflow
+else ifeq ($(BUILD),legacy)
+  # Preserve the historical behaviour exactly by default.
+  BUILD_FLAGS = -O3 -fbounds-check -g
+else
+  $(error Unknown BUILD='$(BUILD)'; use legacy, production, or debug)
+endif
 
 # these three lines should be edited for your system. On systems 
 # that do not have separate fortran and c libraries, set NETCDF_FOR and NETCDF_C
@@ -25,15 +37,30 @@ FOR2 = mpif90
 AR = ar 
 RANLIB = ranlib 
 OBJ = o
-FFLAGS = $(OPT)  $(DEBUG) -w -o 
-FFLAGS2 =  $(DEBUG) -w -O3 -o 
+FFLAGS = $(BUILD_FLAGS) -w -o 
+FFLAGS2 = $(BUILD_FLAGS) -w -o 
 VAR_TYPE = 1 # 0 single, 1 double
+
+
+# Convenience full-build targets. These clean first so object files compiled
+# with different flags are never mixed. Plain `make` remains the legacy build.
+legacy:
+	$(MAKE) cleanall
+	$(MAKE) BUILD=legacy main.exe
+
+production:
+	$(MAKE) cleanall
+	$(MAKE) BUILD=production main.exe
+
+debug:
+	$(MAKE) cleanall
+	$(MAKE) BUILD=debug main.exe
 
 main.exe	:  model_lib.a  main.$(OBJ) variables.$(OBJ) initialisation.$(OBJ) \
 				mpi_module.$(OBJ) driver_code.$(OBJ) advection.$(OBJ)
 	$(FOR2) $(FFLAGS2)main.exe main.$(OBJ) variables.$(OBJ) initialisation.$(OBJ) \
 			 mpi_module.$(OBJ) driver_code.$(OBJ) advection.$(OBJ) -lm model_lib.a \
-		${NETCDFLIB} -I ${NETCDFMOD} ${NETCDF_LIB} $(DEBUG)
+		${NETCDFLIB} -I ${NETCDFMOD} ${NETCDF_LIB}
 model_lib.a	:   osnf_code
 	$(AR) rc model_lib.a \
 				$(OSNF_DIR)/numerics.$(OBJ) $(OSNF_DIR)/zeroin.$(OBJ) $(OSNF_DIR)/sfmin.$(OBJ) \
@@ -61,11 +88,10 @@ main.$(OBJ)   : main.f90 variables.$(OBJ) mpi_module.$(OBJ) initialisation.$(OBJ
 	$(FOR)  main.f90 -I ${NETCDFMOD} -I$(OSNF_DIR) $(FFLAGS)main.$(OBJ) 
 
 osnf_code:
-	$(MAKE) -C $(OSNF_DIR)
+	$(MAKE) -C $(OSNF_DIR) FFLAGS="$(BUILD_FLAGS) -w -o" FFLAGS2="$(BUILD_FLAGS) -w -o"
 
 clean: 
-	rm *.exe  *.o *.mod *~ \
-	model_lib.a
+	rm -f *.exe *.o *.mod *~ model_lib.a
 
 cleanall:
 	for i in $(CLEANDIRS); do \
